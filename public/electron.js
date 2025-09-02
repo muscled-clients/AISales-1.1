@@ -54,7 +54,9 @@ function createWindow() {
     minWidth: 800,
     minHeight: 600,
     icon: path.join(__dirname, 'icon.png'), // Add app icon
-    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+    // Use default title bar for easier window dragging
+    // Change to 'hiddenInset' if you want a custom title bar (requires CSS draggable regions)
+    titleBarStyle: 'default',
     show: false, // Don't show until ready
     webPreferences: {
       nodeIntegration: false,

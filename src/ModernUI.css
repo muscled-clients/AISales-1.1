@@ -117,6 +117,18 @@
   justify-content: space-between;
   align-items: center;
   height: 60px;
+  /* Make header draggable on macOS */
+  -webkit-app-region: drag;
+  /* Add padding for macOS traffic lights when using hiddenInset */
+  padding-left: 80px;
+}
+
+/* Ensure buttons and controls are not draggable */
+.modern-header button,
+.modern-header input,
+.modern-header select,
+.header-controls {
+  -webkit-app-region: no-drag;
 }
 
 .modern-logo {
@@ -125,6 +137,7 @@
   background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+  user-select: none;
 }
 
 /* Modern Footer */
