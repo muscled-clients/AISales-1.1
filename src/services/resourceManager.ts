@@ -1,3 +1,5 @@
+import logger from '../utils/logger';
+
 /**
  * Centralized resource management service
  * Handles cleanup of event listeners, timers, and async operations
@@ -31,7 +33,7 @@ class ResourceManager {
       element.removeEventListener(event, handler, options);
     });
     
-    console.log(`📎 Added event listener: ${id} -> ${event}`);
+    logger.debug(`📎 Added event listener: ${id} -> ${event}`);
   }
 
   /**
@@ -42,7 +44,7 @@ class ResourceManager {
     if (cleanups) {
       cleanups.forEach(cleanup => cleanup());
       this.listeners.delete(id);
-      console.log(`🧹 Removed ${cleanups.size} event listeners for: ${id}`);
+      logger.debug(`🧹 Removed ${cleanups.size} event listeners for: ${id}`);
     }
   }
 
@@ -55,7 +57,7 @@ class ResourceManager {
     
     const controller = new AbortController();
     this.abortControllers.set(id, controller);
-    console.log(`🎯 Created AbortController: ${id}`);
+    logger.debug(`🎯 Created AbortController: ${id}`);
     
     return controller;
   }
@@ -68,7 +70,7 @@ class ResourceManager {
     if (controller) {
       controller.abort();
       this.abortControllers.delete(id);
-      console.log(`❌ Cancelled request: ${id}`);
+      logger.debug(`❌ Cancelled request: ${id}`);
     }
   }
 
@@ -78,7 +80,7 @@ class ResourceManager {
   cancelAllRequests(): void {
     this.abortControllers.forEach((controller, id) => {
       controller.abort();
-      console.log(`❌ Cancelled request: ${id}`);
+      logger.debug(`❌ Cancelled request: ${id}`);
     });
     this.abortControllers.clear();
   }
@@ -92,7 +94,7 @@ class ResourceManager {
     
     const interval = setInterval(callback, ms);
     this.intervals.set(id, interval);
-    console.log(`⏱️ Set interval: ${id} (${ms}ms)`);
+    logger.debug(`⏱️ Set interval: ${id} (${ms}ms)`);
   }
 
   /**
@@ -103,7 +105,7 @@ class ResourceManager {
     if (interval) {
       clearInterval(interval);
       this.intervals.delete(id);
-      console.log(`⏹️ Cleared interval: ${id}`);
+      logger.debug(`⏹️ Cleared interval: ${id}`);
     }
   }
 
@@ -120,7 +122,7 @@ class ResourceManager {
     }, ms);
     
     this.timeouts.set(id, timeout);
-    console.log(`⏲️ Set timeout: ${id} (${ms}ms)`);
+    logger.debug(`⏲️ Set timeout: ${id} (${ms}ms)`);
   }
 
   /**
@@ -131,7 +133,7 @@ class ResourceManager {
     if (timeout) {
       clearTimeout(timeout);
       this.timeouts.delete(id);
-      console.log(`⏹️ Cleared timeout: ${id}`);
+      logger.debug(`⏹️ Cleared timeout: ${id}`);
     }
   }
 
@@ -139,7 +141,7 @@ class ResourceManager {
    * Clean up all resources for a specific component
    */
   cleanupComponent(componentId: string): void {
-    console.log(`🧹 Cleaning up all resources for: ${componentId}`);
+    logger.debug(`🧹 Cleaning up all resources for: ${componentId}`);
     
     // Remove event listeners
     this.removeEventListeners(componentId);
@@ -158,7 +160,7 @@ class ResourceManager {
    * Global cleanup - remove all tracked resources
    */
   cleanup(): void {
-    console.log('🧹 Global resource cleanup initiated');
+    logger.debug('🧹 Global resource cleanup initiated');
     
     // Remove all event listeners
     let listenerCount = 0;
@@ -183,7 +185,7 @@ class ResourceManager {
     this.timeouts.forEach(timeout => clearTimeout(timeout));
     this.timeouts.clear();
     
-    console.log(`✅ Global cleanup complete:
+    logger.debug(`✅ Global cleanup complete:
       - ${listenerCount} event listeners removed
       - ${requestCount} requests cancelled
       - ${intervalCount} intervals cleared

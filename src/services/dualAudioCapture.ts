@@ -1,3 +1,5 @@
+import logger from '../utils/logger';
+
 /**
  * Dual Audio Capture - Enhanced for Teams/Video Calls
  * Captures both microphone (your voice) AND system audio (remote participant's voice)
@@ -36,7 +38,7 @@ export class DualAudioCaptureService {
   private onStatusCallback?: (status: string) => void;
 
   constructor() {
-    console.log('🎙️🔊 DualAudioCaptureService initialized');
+    logger.debug('🎙️🔊 DualAudioCaptureService initialized');
   }
 
   /**
@@ -66,7 +68,7 @@ export class DualAudioCaptureService {
    */
   async startCapture(): Promise<void> {
     try {
-      console.log('🚀 Starting dual audio capture...');
+      logger.debug('🚀 Starting dual audio capture...');
       this.onStatusCallback?.('Starting dual audio capture...');
 
       // Initialize audio context
@@ -90,11 +92,11 @@ export class DualAudioCaptureService {
       this.setupAudioProcessing();
 
       this.isCapturing = true;
-      console.log('✅ Dual audio capture started successfully!');
+      logger.debug('✅ Dual audio capture started successfully!');
       this.onStatusCallback?.(`Capture mode: ${this.isDualMode ? 'Dual (Mic + System)' : 'Microphone only'}`);
       
     } catch (error) {
-      console.error('❌ Failed to start dual audio capture:', error);
+      logger.error('❌ Failed to start dual audio capture:', error);
       this.onErrorCallback?.(error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
@@ -104,7 +106,7 @@ export class DualAudioCaptureService {
    * Setup microphone capture
    */
   private async setupMicrophone(): Promise<void> {
-    console.log('🎤 Setting up microphone...');
+    logger.debug('🎤 Setting up microphone...');
     
     this.micStream = await navigator.mediaDevices.getUserMedia({
       audio: {
@@ -121,7 +123,7 @@ export class DualAudioCaptureService {
       throw new Error('No microphone track available');
     }
 
-    console.log('✅ Microphone access granted:', micTrack.getSettings());
+    logger.debug('✅ Microphone access granted:', micTrack.getSettings());
   }
 
   /**
@@ -129,9 +131,9 @@ export class DualAudioCaptureService {
    * This uses the Chrome screen share API to capture system audio
    */
   private async setupSystemAudio(): Promise<void> {
-    console.log('🔊 Setting up system audio capture...');
-    console.log('📝 You will be prompted to share your screen/tab WITH AUDIO');
-    console.log('⚠️  IMPORTANT: Make sure to check "Share system audio" or "Share tab audio"');
+    logger.debug('🔊 Setting up system audio capture...');
+    logger.debug('📝 You will be prompted to share your screen/tab WITH AUDIO');
+    logger.debug('Log:', '⚠️  IMPORTANT: Make sure to check "Share system audio" or "Share tab audio"');
     
     try {
       // Request system audio through screen capture API
@@ -152,19 +154,19 @@ export class DualAudioCaptureService {
         throw new Error('No system audio track - make sure you selected "Share system audio"');
       }
 
-      console.log('✅ System audio access granted:', systemTrack.getSettings());
+      logger.debug('✅ System audio access granted:', systemTrack.getSettings());
       this.isDualMode = true;
 
       // Handle system audio track ending (user stops sharing)
       systemTrack.onended = () => {
-        console.log('⚠️ System audio sharing stopped - switching to microphone only');
+        logger.debug('⚠️ System audio sharing stopped - switching to microphone only');
         this.isDualMode = false;
         this.onStatusCallback?.('System audio stopped - using microphone only');
       };
       
     } catch (error) {
-      console.log('⚠️ System audio not available - continuing with microphone only');
-      console.log('💡 To capture both sides of video calls, restart and select "Share system audio"');
+      logger.debug('⚠️ System audio not available - continuing with microphone only');
+      logger.debug('Log:', '💡 To capture both sides of video calls, restart and select "Share system audio"');
       this.isDualMode = false;
     }
   }
@@ -175,7 +177,7 @@ export class DualAudioCaptureService {
   private setupAudioProcessing(): void {
     if (!this.audioContext) return;
 
-    console.log('🔧 Setting up audio processing...');
+    logger.debug('🔧 Setting up audio processing...');
 
     // Create audio sources
     if (this.micStream) {
@@ -226,14 +228,14 @@ export class DualAudioCaptureService {
       }
       
       mixer.connect(this.processor);
-      console.log('🎵 Audio graph connected in dual mode (Mic + System)');
+      logger.debug('🎵 Audio graph connected in dual mode (Mic + System)');
     } else {
       // Microphone only mode
       if (this.micSource && this.micGainNode) {
         this.micSource.connect(this.micGainNode);
         this.micGainNode.connect(this.processor);
       }
-      console.log('🎵 Audio graph connected in microphone-only mode');
+      logger.debug('🎵 Audio graph connected in microphone-only mode');
     }
 
     // Connect processor to destination (required for processing)
@@ -244,7 +246,7 @@ export class DualAudioCaptureService {
    * Stop audio capture
    */
   async stopCapture(): Promise<void> {
-    console.log('⏹️ Stopping dual audio capture...');
+    logger.debug('⏹️ Stopping dual audio capture...');
     
     this.isCapturing = false;
 
@@ -292,7 +294,7 @@ export class DualAudioCaptureService {
     }
 
     this.isDualMode = false;
-    console.log('✅ Dual audio capture stopped');
+    logger.debug('✅ Dual audio capture stopped');
     this.onStatusCallback?.('Audio capture stopped');
   }
 

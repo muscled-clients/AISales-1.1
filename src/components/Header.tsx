@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAppStore } from '../stores/appStore';
+import logger from '../utils/logger';
 
 const Header: React.FC = () => {
-  const { recording, startRecording, stopRecording, setShowSettings } = useAppStore();
+  const { recording, startRecording, stopRecording, setShowSettings, showTodos, setShowTodos } = useAppStore();
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showMenu, setShowMenu] = useState(false);
@@ -17,22 +18,22 @@ const Header: React.FC = () => {
     try {
       if (recording.isRecording) {
         // Stop recording
-        console.log('🛑 Stopping recording...');
+        logger.debug('🛑 Stopping recording...');
         await stopRecording();
-        console.log('✅ Recording stopped successfully');
+        logger.debug('✅ Recording stopped successfully');
       } else {
         // Start recording
-        console.log('🎬 Starting recording...');
+        logger.debug('🎬 Starting recording...');
         const started = await startRecording();
         
         if (started) {
-          console.log('✅ Recording started successfully');
+          logger.debug('✅ Recording started successfully');
         } else {
           throw new Error('Failed to start recording');
         }
       }
     } catch (error) {
-      console.error('❌ Recording toggle failed:', error);
+      logger.error('❌ Recording toggle failed:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       setError(errorMessage);
       
@@ -207,6 +208,30 @@ const Header: React.FC = () => {
             🔴 {formatDuration(currentDuration)}
           </span>
         )}
+        
+        <button
+          onClick={() => setShowTodos(!showTodos)}
+          style={{
+            padding: '6px 12px',
+            background: showTodos ? 'rgba(0, 122, 204, 0.2)' : 'transparent',
+            border: '1px solid rgba(0, 122, 204, 0.5)',
+            borderRadius: '6px',
+            color: '#007acc',
+            cursor: 'pointer',
+            fontSize: '12px',
+            fontWeight: '500',
+            transition: 'all 0.2s',
+            marginRight: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px'
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(0, 122, 204, 0.1)'}
+          onMouseLeave={(e) => e.currentTarget.style.background = showTodos ? 'rgba(0, 122, 204, 0.2)' : 'transparent'}
+          title={showTodos ? "Hide Todos" : "Show Todos"}
+        >
+          ✅ Todos
+        </button>
         
         <button
           className={`btn ${recording.isRecording ? 'recording' : ''}`}

@@ -1,3 +1,4 @@
+import logger from '../utils/logger';
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { useAppStore } from '../stores/appStore';
 import { resourceManager } from '../services/resourceManager';
@@ -44,7 +45,7 @@ const TranscriptPanelOptimized: React.FC = () => {
         const selectedText = selection?.toString().trim();
         
         if (selectedText && selectedText.length > 0) {
-          console.log('📎 Setting context from selection:', selectedText);
+          logger.debug('📎 Setting context from selection:', selectedText);
           setSelectedContextFromTranscript([selectedText]);
           
           // Visual feedback - flash background

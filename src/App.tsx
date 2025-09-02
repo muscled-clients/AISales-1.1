@@ -1,3 +1,4 @@
+import logger from './utils/logger';
 import React, { useEffect } from 'react';
 import { HashRouter as Router, Routes, Route } from 'react-router-dom';
 import { useAppStore } from './stores/appStore';
@@ -12,25 +13,25 @@ const MainApp: React.FC = () => {
   const sendChatMessage = useAppStore((state) => state.sendChatMessage);
 
   useEffect(() => {
-    console.log('🚀 AI Sales Assistant React app initialized');
+    logger.debug('🚀 AI Sales Assistant React app initialized');
     
     // Initialize services and load settings
-    console.log('📋 Calling initializeServices...');
+    logger.debug('📋 Calling initializeServices...');
     initializeServices().then(() => {
-      console.log('✅ Services initialization complete');
+      logger.debug('✅ Services initialization complete');
     }).catch((error: unknown) => {
-      console.error('❌ Services initialization failed:', error);
+      logger.error('❌ Services initialization failed:', error);
     });
     
     // Test Electron API
     if (window.electronAPI) {
-      console.log('✅ Electron API available');
+      logger.debug('✅ Electron API available');
       window.electronAPI.test();
       
       // Listen for chat messages from overlay
       const handleOverlayChatMessage = (data: {message: string, context?: string[]}) => {
-        console.log('💬 Received chat message from overlay:', data.message);
-        console.log('📎 With context:', data.context);
+        logger.debug('💬 Received chat message from overlay:', data.message);
+        logger.debug('📎 With context:', data.context);
         
         // Set context if provided
         if (data.context && data.context.length > 0) {
@@ -47,7 +48,7 @@ const MainApp: React.FC = () => {
       
       // Listen for selection changes from overlay
       const handleOverlaySelectionChanged = (selectedContext: string[]) => {
-        console.log('📎 Received selection change from overlay:', selectedContext);
+        logger.debug('📎 Received selection change from overlay:', selectedContext);
         const setSelectedContext = useAppStore.getState().setSelectedContext;
         setSelectedContext(selectedContext);
       };
@@ -57,15 +58,15 @@ const MainApp: React.FC = () => {
       }
       
       // Direct test listener removed - it was overriding the service listener
-      console.log('🔗 Electron API is ready for transcript events and overlay chat');
+      logger.debug('🔗 Electron API is ready for transcript events and overlay chat');
     } else {
-      console.error('❌ Electron API not available!');
+      logger.error('❌ Electron API not available!', );
     }
 
     // Listen for overlay sync requests
     if (window.electronAPI && (window.electronAPI as any).onSyncToOverlayRequested) {
       (window.electronAPI as any).onSyncToOverlayRequested(() => {
-        console.log('⚡ Immediate sync to overlay requested');
+        logger.debug('⚡ Immediate sync to overlay requested');
         // Get current state and sync immediately
         const state = useAppStore.getState();
         if (window.electronAPI && (window.electronAPI as any).syncToOverlay) {

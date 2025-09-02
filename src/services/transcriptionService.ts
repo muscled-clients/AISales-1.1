@@ -1,3 +1,5 @@
+import logger from '../utils/logger';
+
 /**
  * Transcription Service - Deepgram WebSocket integration
  * Handles real-time speech-to-text transcription
@@ -26,7 +28,7 @@ export class TranscriptionService {
   private onStatusCallback?: (status: 'connecting' | 'connected' | 'disconnected' | 'error') => void;
 
   constructor() {
-    console.log('🎤 TranscriptionService initialized');
+    logger.debug('🎤 TranscriptionService initialized');
   }
 
   /**
@@ -34,7 +36,7 @@ export class TranscriptionService {
    */
   initialize(apiKey: string): void {
     this.apiKey = apiKey;
-    console.log('🔑 Deepgram API key configured');
+    logger.debug('🔑 Deepgram API key configured');
   }
 
   /**
@@ -46,17 +48,17 @@ export class TranscriptionService {
     }
 
     if (this.isTranscribing) {
-      console.warn('Transcription already in progress');
+      logger.warn('Transcription already in progress', );
       return false;
     }
 
     try {
       await this.connectToDeepgram();
       this.isTranscribing = true;
-      console.log('✅ Transcription started');
+      logger.debug('✅ Transcription started');
       return true;
     } catch (error) {
-      console.error('❌ Failed to start transcription:', error);
+      logger.error('❌ Failed to start transcription:', error);
       if (this.onErrorCallback) {
         this.onErrorCallback(error as Error);
       }
@@ -69,18 +71,18 @@ export class TranscriptionService {
    */
   async stopTranscription(): Promise<void> {
     if (!this.isTranscribing) {
-      console.warn('No transcription in progress');
+      logger.warn('No transcription in progress', );
       return;
     }
 
-    console.log('🛑 Stopping transcription...');
+    logger.debug('🛑 Stopping transcription...');
     this.isTranscribing = false;
     
     if (this.websocket) {
       this.websocket.close(1000, 'Transcription stopped');
     }
     
-    console.log('✅ Transcription stopped');
+    logger.debug('✅ Transcription stopped');
   }
 
   /**
@@ -88,14 +90,14 @@ export class TranscriptionService {
    */
   sendAudioData(audioData: ArrayBuffer): void {
     if (!this.isConnected || !this.websocket || !this.isTranscribing) {
-      console.warn('Cannot send audio - not connected to Deepgram');
+      logger.warn('Cannot send audio - not connected to Deepgram', );
       return;
     }
 
     try {
       this.websocket.send(audioData);
     } catch (error) {
-      console.error('❌ Failed to send audio data:', error);
+      logger.error('❌ Failed to send audio data:', error);
       if (this.onErrorCallback) {
         this.onErrorCallback(error as Error);
       }
@@ -135,24 +137,24 @@ export class TranscriptionService {
    */
   private async connectToDeepgram(): Promise<void> {
     return new Promise((resolve, reject) => {
-      console.log('🔗 Connecting to Deepgram...');
-      console.log('🔑 Using API key:', this.apiKey ? this.apiKey.substring(0, 10) + '...' : 'NO KEY');
+      logger.debug('🔗 Connecting to Deepgram...');
+      logger.debug('🔑 Using API key:', this.apiKey ? this.apiKey.substring(0, 10) + '...' : 'NO KEY');
       this.updateStatus('connecting');
 
       // Deepgram WebSocket URL with optimized parameters
       const deepgramUrl = this.buildDeepgramUrl();
-      console.log('🌐 Deepgram URL:', deepgramUrl);
+      logger.debug('🌐 Deepgram URL:', deepgramUrl);
 
       try {
         this.websocket = new WebSocket(deepgramUrl);
       } catch (error) {
-        console.error('❌ Failed to create WebSocket:', error);
+        logger.error('❌ Failed to create WebSocket:', error);
         reject(new Error('Failed to connect to Deepgram - check your API key'));
         return;
       }
 
       this.websocket.onopen = () => {
-        console.log('✅ Connected to Deepgram');
+        logger.debug('✅ Connected to Deepgram');
         this.isConnected = true;
         this.reconnectAttempts = 0;
         this.updateStatus('connected');
@@ -164,7 +166,7 @@ export class TranscriptionService {
       };
 
       this.websocket.onclose = (event) => {
-        console.log('🔌 Deepgram connection closed:', event.code, event.reason);
+        logger.debug('🔌 Deepgram connection closed:', event.code, event.reason);
         this.isConnected = false;
         this.updateStatus('disconnected');
         
@@ -175,8 +177,8 @@ export class TranscriptionService {
       };
 
       this.websocket.onerror = (error) => {
-        console.error('❌ Deepgram WebSocket error:', error);
-        console.error('Error details:', {
+        logger.error('❌ Deepgram WebSocket error:', error);
+        logger.error('Error details:', {
           readyState: this.websocket?.readyState,
           url: deepgramUrl.substring(0, 50) + '...',
           hasApiKey: !!this.apiKey,
@@ -246,7 +248,7 @@ export class TranscriptionService {
 
           // Only process non-empty transcripts
           if (transcriptResult.text.trim()) {
-            console.log(`📝 Transcript (${transcriptResult.isInterim ? 'interim' : 'final'}):`, 
+            logger.debug('Log:', `📝 Transcript (${transcriptResult.isInterim ? 'interim' : 'final'}):`, 
                        transcriptResult.text);
             
             if (this.onTranscriptCallback) {
@@ -255,15 +257,15 @@ export class TranscriptionService {
           }
         }
       } else if (response.type === 'Metadata') {
-        console.log('📊 Deepgram metadata:', response);
+        logger.debug('📊 Deepgram metadata:', response);
       } else if (response.type === 'SpeechStarted') {
-        console.log('🎙️ Speech started');
+        logger.debug('🎙️ Speech started');
       } else if (response.type === 'UtteranceEnd') {
-        console.log('🔚 Utterance end');
+        logger.debug('🔚 Utterance end');
       }
     } catch (error) {
-      console.error('❌ Failed to parse Deepgram response:', error);
-      console.error('Raw data:', data);
+      logger.error('❌ Failed to parse Deepgram response:', error);
+      logger.error('Raw data:', data);
     }
   }
 
@@ -272,16 +274,16 @@ export class TranscriptionService {
    */
   private attemptReconnect(): void {
     this.reconnectAttempts++;
-    console.log(`🔄 Attempting reconnection ${this.reconnectAttempts}/${this.maxReconnectAttempts}...`);
+    logger.debug(`🔄 Attempting reconnection ${this.reconnectAttempts}/${this.maxReconnectAttempts}...`);
     
     setTimeout(async () => {
       try {
         await this.connectToDeepgram();
       } catch (error) {
-        console.error('❌ Reconnection failed:', error);
+        logger.error('❌ Reconnection failed:', error);
         
         if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-          console.error('💔 Max reconnection attempts reached');
+          logger.error('💔 Max reconnection attempts reached', );
           this.isTranscribing = false;
           
           if (this.onErrorCallback) {

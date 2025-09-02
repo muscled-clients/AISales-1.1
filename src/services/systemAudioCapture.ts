@@ -1,3 +1,5 @@
+import logger from '../utils/logger';
+
 /**
  * System Audio Capture Service for Client Calls (Windows + Mac)
  * Captures audio from meeting applications like Teams, Zoom, etc.
@@ -14,7 +16,7 @@ export class SystemAudioCapture {
   private platform: string = 'unknown';
 
   constructor() {
-    console.log('🔊 SystemAudioCapture initialized (Cross-platform: Windows + Mac)');
+    logger.debug('🔊 SystemAudioCapture initialized (Cross-platform: Windows + Mac)');
     this.detectPlatform();
   }
 
@@ -22,19 +24,19 @@ export class SystemAudioCapture {
     try {
       if (window.electronAPI) {
         this.platform = await window.electronAPI.getPlatform();
-        console.log(`🖥️ Platform detected: ${this.platform}`);
+        logger.debug(`🖥️ Platform detected: ${this.platform}`);
       }
     } catch (error) {
-      console.warn('Failed to detect platform, using cross-platform approach');
+      logger.warn('Failed to detect platform, using cross-platform approach', );
     }
   }
 
   async startCapture(): Promise<boolean> {
     try {
-      console.log('🔊 Starting system audio capture for client calls...');
+      logger.debug('🔊 Starting system audio capture for client calls...');
       
       if (!window.electronAPI) {
-        console.warn('⚠️ Electron API not available for system audio capture');
+        logger.warn('⚠️ Electron API not available for system audio capture', );
         return false;
       }
       
@@ -55,11 +57,11 @@ export class SystemAudioCapture {
           throw new Error('No audio sources available');
         }
       } catch (error) {
-        console.warn('⚠️ Failed to get audio sources:', error);
+        logger.warn('⚠️ Failed to get audio sources:', error);
         return false;
       }
 
-      console.log('📋 Available sources:', audioSources.sources.map((s: any) => s.name));
+      logger.debug('📋 Available sources:', audioSources.sources.map((s: any) => s.name));
 
       // Try to find meeting applications
       const meetingApps = audioSources.sources.filter((source: any) => {
@@ -76,7 +78,7 @@ export class SystemAudioCapture {
 
       // Use meeting app if found, otherwise use entire screen
       const selectedSource = meetingApps.length > 0 ? meetingApps[0] : audioSources.sources[0];
-      console.log(`🎯 Selected source for system audio: "${selectedSource.name}"`);
+      logger.debug(`🎯 Selected source for system audio: "${selectedSource.name}"`);
 
       // Create cross-platform constraints for system audio capture
       const constraints = this.platform === 'darwin' ? {
@@ -109,11 +111,11 @@ export class SystemAudioCapture {
       // Get system audio stream using appropriate method for each platform
       if (this.platform === 'darwin') {
         // macOS: Use getDisplayMedia for system audio
-        console.log('🍎 Using macOS getDisplayMedia for system audio...');
+        logger.debug('🍎 Using macOS getDisplayMedia for system audio...');
         this.systemStream = await navigator.mediaDevices.getDisplayMedia(constraints as any);
       } else {
         // Windows/Linux: Use getUserMedia with desktop source
-        console.log('🪟 Using Windows/Linux getUserMedia with desktop source...');
+        logger.debug('🪟 Using Windows/Linux getUserMedia with desktop source...');
         this.systemStream = await (navigator.mediaDevices as any).getUserMedia(constraints);
       }
 
@@ -121,8 +123,8 @@ export class SystemAudioCapture {
         throw new Error('Failed to get system audio stream');
       }
 
-      console.log('✅ System audio stream obtained');
-      console.log(`🔊 Audio tracks: ${this.systemStream.getAudioTracks().length}`);
+      logger.debug('✅ System audio stream obtained');
+      logger.debug(`🔊 Audio tracks: ${this.systemStream.getAudioTracks().length}`);
 
       // Create audio context
       this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
@@ -162,9 +164,9 @@ export class SystemAudioCapture {
         packetCount++;
         if (packetCount % 100 === 0) {
           if (volume > 0.001) {
-            console.log(`🔊 SYSTEM AUDIO DETECTED - Packet ${packetCount}, volume: ${volume.toFixed(4)}`);
+            logger.debug(`🔊 SYSTEM AUDIO DETECTED - Packet ${packetCount}, volume: ${volume.toFixed(4)}`);
           } else {
-            console.log(`🔇 System audio packet ${packetCount}, volume: ${volume.toFixed(4)} (no sound)`);
+            logger.debug(`🔇 System audio packet ${packetCount}, volume: ${volume.toFixed(4)} (no sound)`);
           }
         }
 
@@ -180,24 +182,24 @@ export class SystemAudioCapture {
 
       // Resume audio context if needed
       if (this.audioContext.state === 'suspended') {
-        console.log('🔄 Resuming audio context...');
+        logger.debug('🔄 Resuming audio context...');
         await this.audioContext.resume();
       }
 
       this.isCapturing = true;
-      console.log('✅ System audio capture started successfully');
+      logger.debug('✅ System audio capture started successfully');
       return true;
 
     } catch (error) {
-      console.error('❌ Failed to start system audio capture:', error);
-      console.error('💡 Make sure to grant screen recording/audio permissions when prompted');
+      logger.error('❌ Failed to start system audio capture:', error);
+      logger.error('💡 Make sure to grant screen recording/audio permissions when prompted', );
       this.cleanup();
       return false;
     }
   }
 
   stopCapture(): void {
-    console.log('🛑 Stopping system audio capture...');
+    logger.debug('🛑 Stopping system audio capture...');
     this.isCapturing = false;
     this.cleanup();
   }
@@ -229,7 +231,7 @@ export class SystemAudioCapture {
     if (this.systemStream) {
       this.systemStream.getTracks().forEach(track => {
         track.stop();
-        console.log('🔇 Stopped system audio track');
+        logger.debug('🔇 Stopped system audio track');
       });
       this.systemStream = null;
     }

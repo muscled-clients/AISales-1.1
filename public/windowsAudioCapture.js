@@ -1,3 +1,4 @@
+const logger = require('./logger');
 /**
  * Windows System Audio Capture for Client Calls
  * Uses Electron's desktopCapturer API to capture system audio from applications
@@ -18,7 +19,7 @@ class WindowsAudioCapture {
 
   async startSystemAudioCapture() {
     try {
-      console.log('🔊 Starting Windows system audio capture...');
+      logger.debug('🔊 Starting Windows system audio capture...');
       
       // Get available audio sources with high quality options
       const sources = await desktopCapturer.getSources({ 
@@ -28,7 +29,7 @@ class WindowsAudioCapture {
         thumbnailSize: { width: 0, height: 0 }, // Don't need video thumbnails
       });
       
-      console.log('📋 Available audio sources:', sources.map(s => s.name));
+      logger.debug('📋 Available audio sources:', sources.map(s => s.name));
       
       if (!sources || sources.length === 0) {
         throw new Error('No capturable sources found');
@@ -48,7 +49,7 @@ class WindowsAudioCapture {
       
       // Use meeting app if found, otherwise use entire screen
       const selectedSource = meetingApps.length > 0 ? meetingApps[0] : sources[0];
-      console.log(`🎯 Selected audio source: "${selectedSource.name}"`);
+      logger.debug(`🎯 Selected audio source: "${selectedSource.name}"`);
       
       // Create constraints for high quality audio capture
       const constraints = {
@@ -83,8 +84,8 @@ class WindowsAudioCapture {
         throw new Error('Failed to capture system audio - no audio tracks available');
       }
       
-      console.log('✅ System audio stream obtained');
-      console.log('🔊 System audio tracks:', this.systemStream.getAudioTracks().length);
+      logger.debug('✅ System audio stream obtained');
+      logger.debug('🔊 System audio tracks:', this.systemStream.getAudioTracks().length);
       
       // Create audio context for processing
       this.audioContext = new (global.AudioContext || global.webkitAudioContext)({
@@ -93,7 +94,7 @@ class WindowsAudioCapture {
       
       // Create system audio source
       this.systemAudioSource = this.audioContext.createMediaStreamSource(this.systemStream);
-      console.log('✅ System audio source node created');
+      logger.debug('✅ System audio source node created');
       
       // Create audio processor
       this.audioProcessor = this.audioContext.createScriptProcessor(4096, 2, 1);
@@ -126,10 +127,10 @@ class WindowsAudioCapture {
         // Log progress
         packetCount++;
         if (packetCount % 50 === 0) {
-          console.log(`🔊 System audio packet ${packetCount}, volume: ${volume.toFixed(4)}`);
+          logger.debug(`🔊 System audio packet ${packetCount}, volume: ${volume.toFixed(4)}`);
           
           if (volume > 0.001) {
-            console.log('🎵 SYSTEM AUDIO DETECTED! Sending to Deepgram...');
+            logger.debug('🎵 SYSTEM AUDIO DETECTED! Sending to Deepgram...');
           }
         }
         
@@ -149,19 +150,19 @@ class WindowsAudioCapture {
       }
       
       this.isCapturing = true;
-      console.log('✅ Windows system audio capture started successfully');
+      logger.debug('✅ Windows system audio capture started successfully');
       return true;
       
     } catch (error) {
-      console.error('❌ Failed to start Windows system audio capture:', error);
-      console.error('💡 Make sure to grant screen recording permissions when prompted');
+      logger.error('❌ Failed to start Windows system audio capture:', error);
+      logger.error('💡 Make sure to grant screen recording permissions when prompted');
       this.cleanup();
       return false;
     }
   }
 
   stopSystemAudioCapture() {
-    console.log('🛑 Stopping Windows system audio capture...');
+    logger.debug('🛑 Stopping Windows system audio capture...');
     this.isCapturing = false;
     this.cleanup();
   }
@@ -185,7 +186,7 @@ class WindowsAudioCapture {
     if (this.systemStream) {
       this.systemStream.getTracks().forEach(track => {
         track.stop();
-        console.log('🔇 Stopped system audio track');
+        logger.debug('🔇 Stopped system audio track');
       });
       this.systemStream = null;
     }

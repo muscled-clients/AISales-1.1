@@ -1,3 +1,4 @@
+import logger from './utils/logger';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
@@ -15,15 +16,15 @@ root.render(
   </React.StrictMode>
 );
 
-console.log('🚀 AI Sales Assistant React app started');
-console.log('📋 Window object:', window);
-console.log('🔌 ElectronAPI available:', !!window.electronAPI);
+logger.debug('🚀 AI Sales Assistant React app started');
+logger.debug('📋 Window object:', window);
+logger.debug('🔌 ElectronAPI available:', !!window.electronAPI);
 
 // Add a global error handler to catch any issues
 window.addEventListener('error', (event) => {
-  console.error('❌ Global error:', event.error);
+  logger.error('❌ Global error:', event.error);
 });
 
 window.addEventListener('unhandledrejection', (event) => {
-  console.error('❌ Unhandled promise rejection:', event.reason);
+  logger.error('❌ Unhandled promise rejection:', event.reason);
 });

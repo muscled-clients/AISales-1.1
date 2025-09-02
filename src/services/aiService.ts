@@ -4,6 +4,7 @@
  */
 
 import { resourceManager } from './resourceManager';
+import logger from '../utils/logger';
 
 interface ChatRequest {
   message: string;
@@ -88,7 +89,7 @@ export class AIService {
   };
 
   constructor() {
-    console.log('🤖 Advanced AIService initialized');
+    logger.debug('🤖 Advanced AIService initialized');
   }
 
   /**
@@ -98,9 +99,9 @@ export class AIService {
     this.apiKey = apiKey;
     this.model = model;
     this.isInitialized = true;
-    console.log(`🔑 OpenAI API configured with model: ${model}`);
-    console.log(`🔑 API Key: ${apiKey.substring(0, 10)}... (length: ${apiKey.length})`);
-    console.log(`🔑 Service initialized: ${this.isInitialized}`);
+    logger.debug(`🔑 OpenAI API configured with model: ${model}`);
+    logger.debug(`🔑 API Key: ${apiKey.substring(0, 10)}... (length: ${apiKey.length})`);
+    logger.debug(`🔑 Service initialized: ${this.isInitialized}`);
   }
 
   /**
@@ -108,7 +109,7 @@ export class AIService {
    */
   isReady(): boolean {
     const ready = this.isInitialized && this.apiKey.length > 0;
-    console.log(`🤖 AI Service ready check: ${ready} (initialized: ${this.isInitialized}, keyLength: ${this.apiKey.length})`);
+    logger.debug(`🤖 AI Service ready check: ${ready} (initialized: ${this.isInitialized}, keyLength: ${this.apiKey.length})`);
     return ready;
   }
 
@@ -268,11 +269,11 @@ export class AIService {
     const timeoutId = setTimeout(() => {
       controller.abort();
       this.currentRequests.delete(requestId);
-      console.log(`⏱️ Request ${requestId} timed out after ${this.REQUEST_TIMEOUT}ms`);
+      logger.warn(`⏱️ Request ${requestId} timed out after ${this.REQUEST_TIMEOUT}ms`);
     }, this.REQUEST_TIMEOUT);
 
     try {
-      console.log('💬 Sending chat message to OpenAI...');
+      logger.debug('💬 Sending chat message to OpenAI...');
 
       const messages = [
         {
@@ -318,7 +319,7 @@ export class AIService {
       
       const content = data.choices?.[0]?.message?.content || 'No response generated';
 
-      console.log('✅ OpenAI response received');
+      logger.debug('✅ OpenAI response received');
       
       return {
         content,
@@ -326,10 +327,10 @@ export class AIService {
       };
     } catch (error: any) {
       if (error.name === 'AbortError') {
-        console.error('⏱️ Request timed out');
+        logger.error('⏱️ Request timed out');
         throw new Error('Request timeout - please try again');
       }
-      console.error('❌ OpenAI chat failed:', error);
+      logger.error('❌ OpenAI chat failed:', error);
       throw error;
     } finally {
       clearTimeout(timeoutId);
@@ -357,7 +358,7 @@ export class AIService {
    * Cancel all pending AI requests
    */
   cancelAllRequests(): void {
-    console.log('❌ Cancelling all AI requests');
+    logger.debug('❌ Cancelling all AI requests');
     this.currentRequests.forEach((controller, id) => {
       controller.abort();
       resourceManager.cancelRequest(id);
@@ -369,7 +370,7 @@ export class AIService {
    * Generate AI insights from text with advanced analysis
    */
   async generateInsights(request: InsightRequest): Promise<AIInsight[]> {
-    console.log('🚨 AI SERVICE GENERATE INSIGHTS CALLED 🚨');
+    logger.debug('🚨 AI SERVICE GENERATE INSIGHTS CALLED 🚨');
     
     if (!this.isReady()) {
       throw new Error('AI service not initialized');
@@ -377,7 +378,7 @@ export class AIService {
 
     // Check rate limiting
     if (!this.canMakeSuggestion()) {
-      console.log('Rate limit reached, skipping suggestion generation');
+      logger.warn('Rate limit reached, skipping suggestion generation');
       return [];
     }
 
@@ -386,7 +387,7 @@ export class AIService {
       const responseType = this.detectResponseType(request.text);
       const detectedTopics = this.detectTopics(request.text);
       
-      console.log(`Detected response type: ${responseType.type}, topics: ${detectedTopics.map(t => t.category).join(', ')}`);
+      logger.debug(`Detected response type: ${responseType.type}, topics: ${detectedTopics.map(t => t.category).join(', ')}`);
 
       // Generate insights using OpenAI with enhanced prompts
       const insights = await this.generateOpenAIInsights(request, responseType, detectedTopics);
@@ -396,7 +397,7 @@ export class AIService {
       
       return insights;
     } catch (error) {
-      console.error('Failed to generate insights:', error);
+      logger.error('Failed to generate insights:', error);
       // Fallback to contextual suggestions
       return this.generateContextualSuggestions(request.text, this.detectTopics(request.text));
     }
@@ -412,12 +413,12 @@ export class AIService {
   ): Promise<AIInsight[]> {
     
     if (!this.isReady()) {
-      console.log('⚠️ AI service not ready, using fallback insights');
+      logger.warn('⚠️ AI service not ready, using fallback insights');
       return this.generateFallbackInsights(request);
     }
 
     try {
-      console.log('🔍 Generating AI insights...');
+      logger.debug('🔍 Generating AI insights...');
 
       const prompt = `You are a business intelligence assistant analyzing a business conversation. Extract ONLY meaningful, actionable business insights.
 
@@ -453,7 +454,7 @@ Respond with ONLY a JSON array:
 
 If no business-relevant insights found, respond with: []`;
 
-      console.log('🌐 Making OpenAI API request for insights...');
+      logger.debug('🌐 Making OpenAI API request for insights...');
       const response = await fetch(`${this.baseUrl}/chat/completions`, {
         method: 'POST',
         headers: {
@@ -469,10 +470,10 @@ If no business-relevant insights found, respond with: []`;
         })
       });
 
-      console.log('🌐 OpenAI response status:', response.status);
+      logger.debug('🌐 OpenAI response status:', response.status);
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('❌ OpenAI API error response:', errorText);
+        logger.error('❌ OpenAI API error response:', errorText);
         throw new Error(`OpenAI API error: ${response.status}`);
       }
 
@@ -482,16 +483,16 @@ If no business-relevant insights found, respond with: []`;
       try {
         // Parse JSON response
         const insights: AIInsight[] = JSON.parse(content);
-        console.log(`✅ Generated ${insights.length} AI insights`);
+        logger.debug(`✅ Generated ${insights.length} AI insights`);
         return insights.filter(insight => 
           insight.title && insight.content && insight.category
         );
       } catch (parseError) {
-        console.warn('⚠️ Failed to parse AI insights, using fallback');
+        logger.warn('⚠️ Failed to parse AI insights, using fallback');
         return this.generateFallbackInsights(request);
       }
     } catch (error) {
-      console.error('❌ AI insight generation failed:', error);
+      logger.error('❌ AI insight generation failed:', error);
       return this.generateFallbackInsights(request);
     }
   }
@@ -592,20 +593,20 @@ If no business-relevant insights found, respond with: []`;
    * Detect todos from text using AI
    */
   async detectTodos(text: string): Promise<TodoSuggestion[]> {
-    console.log('🚨 AI SERVICE DETECT TODOS CALLED 🚨');
-    console.log('📋 detectTodos called with text length:', text.length);
-    console.log('📋 AI service status:', {
+    logger.debug('🚨 AI SERVICE DETECT TODOS CALLED 🚨');
+    logger.debug('📋 detectTodos called with text length:', text.length);
+    logger.debug('📋 AI service status:', {
       isReady: this.isReady(),
       apiKey: this.apiKey ? this.apiKey.substring(0, 10) + '...' : 'NO KEY'
     });
     
     if (!this.isReady()) {
-      console.log('⚠️ AI service not ready, using fallback todo detection');
+      logger.warn('⚠️ AI service not ready, using fallback todo detection');
       return this.detectFallbackTodos(text);
     }
 
     try {
-      console.log('✅ Detecting todos with AI...');
+      logger.debug('✅ Detecting todos with AI...');
 
       const prompt = `Analyze this text and extract actionable todo items:
 
@@ -627,7 +628,7 @@ Respond with ONLY a JSON array (no markdown):
 
 If no todos found, respond with: []`;
 
-      console.log('🌐 Making OpenAI API request for todos...');
+      logger.debug('🌐 Making OpenAI API request for todos...');
       const response = await fetch(`${this.baseUrl}/chat/completions`, {
         method: 'POST',
         headers: {
@@ -643,10 +644,10 @@ If no todos found, respond with: []`;
         })
       });
 
-      console.log('🌐 OpenAI response status:', response.status);
+      logger.debug('🌐 OpenAI response status:', response.status);
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('❌ OpenAI API error response:', errorText);
+        logger.error('❌ OpenAI API error response:', errorText);
         throw new Error(`OpenAI API error: ${response.status}`);
       }
 
@@ -655,14 +656,14 @@ If no todos found, respond with: []`;
 
       try {
         const todos: TodoSuggestion[] = JSON.parse(content);
-        console.log(`✅ Detected ${todos.length} AI todos`);
+        logger.debug(`✅ Detected ${todos.length} AI todos`);
         return todos.filter(todo => todo.text && todo.text.length > 3);
       } catch (parseError) {
-        console.warn('⚠️ Failed to parse AI todos, using fallback');
+        logger.warn('⚠️ Failed to parse AI todos, using fallback');
         return this.detectFallbackTodos(text);
       }
     } catch (error) {
-      console.error('❌ AI todo detection failed:', error);
+      logger.error('❌ AI todo detection failed:', error);
       return this.detectFallbackTodos(text);
     }
   }

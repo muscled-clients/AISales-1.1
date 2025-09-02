@@ -1,4 +1,5 @@
 // Improved AI Processor based on proven original app approach
+import logger from '../utils/logger';
 import { provenAIService } from '../services/provenAIService';
 import { Todo } from '../types';
 
@@ -45,25 +46,25 @@ class ImprovedAIProcessor {
     }
 
     if (!provenAIService.isReady()) {
-      console.log('⚠️ AI not ready or no API key');
+      logger.debug('⚠️ AI not ready or no API key');
       return;
     }
 
     if (text.length < this.MIN_TEXT_LENGTH) {
-      console.log('⏭️ Text too short for analysis');
+      logger.debug('⏭️ Text too short for analysis');
       return;
     }
 
     // Avoid processing duplicates
     if (this.state.lastProcessedText === text) {
-      console.log('⏭️ Skipping duplicate text');
+      logger.debug('⏭️ Skipping duplicate text');
       return;
     }
 
     this.state.lastProcessedText = text;
     this.state.lastProcessingTime = Date.now();
 
-    console.log('🚀 Processing transcript:', text.substring(0, 50) + '...');
+    logger.debug('🚀 Processing transcript:', text.substring(0, 50) + '...');
 
     // Process todos with debouncing (like original app)
     if (settings.autoTodos) {
@@ -119,12 +120,12 @@ class ImprovedAIProcessor {
     onTodo: (todo: Omit<Todo, 'id' | 'createdAt'>) => void
   ) {
     if (this.state.isProcessingTodos) {
-      console.log('⏳ Already processing todos');
+      logger.debug('⏳ Already processing todos');
       return;
     }
 
     this.state.isProcessingTodos = true;
-    console.log('📋 Analyzing transcript for todos...');
+    logger.debug('📋 Analyzing transcript for todos...');
 
     try {
       // Use the exact prompt from original app that worked
@@ -153,12 +154,12 @@ If no clear actionable tasks are found, respond with: []`;
       ]);
 
       if (todos && todos.length > 0) {
-        console.log('✅ AI todos detected:', todos.length);
+        logger.debug('✅ AI todos detected:', todos.length);
         
         // Add todos directly from aiService response
         for (const todo of todos) {
           if (todo.text && todo.text.length > 5) {
-            console.log('➕ Adding todo:', todo.text);
+            logger.debug('➕ Adding todo:', todo.text);
             onTodo({
               text: todo.text,
               completed: false,
@@ -168,10 +169,10 @@ If no clear actionable tasks are found, respond with: []`;
           }
         }
       } else {
-        console.log('ℹ️ No todos detected in transcript');
+        logger.debug('ℹ️ No todos detected in transcript');
       }
     } catch (error) {
-      console.error('❌ Todo detection failed:', error);
+      logger.error('❌ Todo detection failed:', error);
     } finally {
       this.state.isProcessingTodos = false;
     }
@@ -185,12 +186,12 @@ If no clear actionable tasks are found, respond with: []`;
     onSuggestion: (message: string) => void
   ) {
     if (this.state.isProcessingSuggestions) {
-      console.log('⏳ Already processing suggestions');
+      logger.debug('⏳ Already processing suggestions');
       return;
     }
 
     this.state.isProcessingSuggestions = true;
-    console.log('💡 Generating AI suggestion...');
+    logger.debug('💡 Generating AI suggestion...');
 
     try {
       // Use ultra-short prompt for FAST responses (like original app)
@@ -212,13 +213,13 @@ If no clear actionable tasks are found, respond with: []`;
 
       if (insights && insights.length > 0) {
         const suggestion = insights[0].content;
-        console.log('💡 AI suggestion generated');
+        logger.debug('💡 AI suggestion generated');
         onSuggestion(`🤖 **AI Insight:**\n\n${suggestion.trim()}`);
       }
     } catch (error) {
-      console.error('❌ Suggestion generation failed:', error);
+      logger.error('❌ Suggestion generation failed:', error);
       if (error instanceof Error && error.message === 'AI response timeout') {
-        console.log('⚠️ AI taking too long, skipping suggestion');
+        logger.debug('⚠️ AI taking too long, skipping suggestion');
       }
     } finally {
       this.state.isProcessingSuggestions = false;

@@ -1,3 +1,5 @@
+import logger from '../utils/logger';
+
 /**
  * Audio Capture Service - WebAudio API implementation
  * Captures microphone audio and streams to Electron main process
@@ -16,7 +18,7 @@ export class AudioCaptureService {
   private onErrorCallback?: (error: Error) => void;
 
   constructor() {
-    console.log('🎙️ AudioCaptureService initialized');
+    logger.debug('🎙️ AudioCaptureService initialized');
   }
 
   /**
@@ -24,12 +26,12 @@ export class AudioCaptureService {
    */
   async startCapture(): Promise<boolean> {
     if (this.isCapturing) {
-      console.warn('Audio capture already in progress');
+      logger.warn('Audio capture already in progress', );
       return false;
     }
 
     try {
-      console.log('🎤 Starting audio capture...');
+      logger.debug('🎤 Starting audio capture...');
       
       // Request microphone access with optimal settings
       this.mediaStream = await navigator.mediaDevices.getUserMedia({
@@ -78,12 +80,12 @@ export class AudioCaptureService {
       this.audioProcessor.connect(this.audioContext.destination);
 
       this.isCapturing = true;
-      console.log('✅ Audio capture started successfully');
-      console.log(`📊 Audio config: ${this.sampleRate}Hz, ${this.bufferSize} buffer, 1 channel`);
+      logger.debug('✅ Audio capture started successfully');
+      logger.debug(`📊 Audio config: ${this.sampleRate}Hz, ${this.bufferSize} buffer, 1 channel`);
       
       return true;
     } catch (error) {
-      console.error('❌ Failed to start audio capture:', error);
+      logger.error('❌ Failed to start audio capture:', error);
       this.cleanup();
       
       if (this.onErrorCallback) {
@@ -99,14 +101,14 @@ export class AudioCaptureService {
    */
   async stopCapture(): Promise<void> {
     if (!this.isCapturing) {
-      console.warn('No audio capture in progress');
+      logger.warn('No audio capture in progress', );
       return;
     }
 
-    console.log('🛑 Stopping audio capture...');
+    logger.debug('🛑 Stopping audio capture...');
     this.isCapturing = false;
     this.cleanup();
-    console.log('✅ Audio capture stopped');
+    logger.debug('✅ Audio capture stopped');
   }
 
   /**
@@ -140,7 +142,7 @@ export class AudioCaptureService {
       });
       return result.state;
     } catch (error) {
-      console.error('Failed to check microphone permission:', error);
+      logger.error('Failed to check microphone permission:', error);
       return 'prompt';
     }
   }
@@ -153,7 +155,7 @@ export class AudioCaptureService {
       const devices = await navigator.mediaDevices.enumerateDevices();
       return devices.filter(device => device.kind === 'audioinput');
     } catch (error) {
-      console.error('Failed to get audio devices:', error);
+      logger.error('Failed to get audio devices:', error);
       return [];
     }
   }
@@ -171,7 +173,7 @@ export class AudioCaptureService {
 
     // Close audio context
     if (this.audioContext) {
-      this.audioContext.close().catch(console.error);
+      this.audioContext.close().catch((error) => logger.error('Failed to close audio context:', error));
       this.audioContext = null;
     }
 
@@ -179,7 +181,7 @@ export class AudioCaptureService {
     if (this.mediaStream) {
       this.mediaStream.getTracks().forEach(track => {
         track.stop();
-        console.log(`🔇 Stopped track: ${track.kind}`);
+        logger.debug(`🔇 Stopped track: ${track.kind}`);
       });
       this.mediaStream = null;
     }

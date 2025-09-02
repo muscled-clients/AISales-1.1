@@ -1,4 +1,5 @@
 const { app, BrowserWindow, ipcMain, Menu, Tray, nativeImage, desktopCapturer, systemPreferences } = require('electron');
+const logger = require('./logger');
 const path = require('path');
 const fs = require('fs');
 const DeepgramService = require('./deepgramService');
@@ -26,10 +27,10 @@ function loadSettings() {
     if (fs.existsSync(settingsPath)) {
       const data = fs.readFileSync(settingsPath, 'utf8');
       settings = { ...settings, ...JSON.parse(data) };
-      console.log('✅ Settings loaded from:', settingsPath);
+      logger.debug('✅ Settings loaded from:', settingsPath);
     }
   } catch (error) {
-    console.error('❌ Failed to load settings:', error);
+    logger.error('❌ Failed to load settings:', error);
   }
 }
 
@@ -37,9 +38,9 @@ function loadSettings() {
 function saveSettings() {
   try {
     fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
-    console.log('✅ Settings saved to:', settingsPath);
+    logger.debug('✅ Settings saved to:', settingsPath);
   } catch (error) {
-    console.error('❌ Failed to save settings:', error);
+    logger.error('❌ Failed to save settings:', error);
   }
 }
 
@@ -236,7 +237,7 @@ function createMenu() {
 function createTray() {
   // Don't create duplicate tray
   if (tray) {
-    console.log('⚠️ Tray already exists, skipping creation');
+    logger.debug('⚠️ Tray already exists, skipping creation');
     return;
   }
   
@@ -428,7 +429,7 @@ ipcMain.handle('test-openai', async (event, apiKey) => {
 
 // Overlay mode handlers
 ipcMain.handle('open-overlay', () => {
-  console.log('🪟 Opening overlay window...');
+  logger.debug('🪟 Opening overlay window...');
   createOverlayWindow(mainWindow, isDev);
   // Hide main window when overlay opens
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -438,7 +439,7 @@ ipcMain.handle('open-overlay', () => {
 });
 
 ipcMain.handle('close-overlay', () => {
-  console.log('🪟 Closing overlay window...');
+  logger.debug('🪟 Closing overlay window...');
   closeOverlayWindow();
   // Show main window when overlay closes
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -449,23 +450,23 @@ ipcMain.handle('close-overlay', () => {
 });
 
 ipcMain.handle('sync-to-overlay', (event, data) => {
-  console.log('🔄 Syncing data to overlay:', data.action);
+  logger.debug('🔄 Syncing data to overlay:', data.action);
   
   if (data.action === 'sendChatMessage') {
     // Forward chat message to main window for processing
-    console.log('💬 Forwarding chat message from overlay to main window:', data.message);
-    console.log('📎 With context:', data.context);
+    logger.debug('💬 Forwarding chat message from overlay to main window:', data.message);
+    logger.debug('📎 With context:', data.context);
     mainWindow.webContents.send('overlay-chat-message', { message: data.message, context: data.context });
   } else if (data.action === 'syncSelection') {
     // Forward selection changes to main window
-    console.log('📎 Syncing selection from overlay to main:', data.selectedContext);
+    logger.debug('📎 Syncing selection from overlay to main:', data.selectedContext);
     mainWindow.webContents.send('overlay-selection-changed', data.selectedContext);
   } else if (data.action === 'syncState') {
     // Other sync actions with proper data
     syncDataToOverlay(data);
   } else {
     // Handle undefined actions
-    console.log('⚠️ Undefined sync action, syncing full state');
+    logger.debug('⚠️ Undefined sync action, syncing full state');
     syncDataToOverlay(data);
   }
   
@@ -499,10 +500,10 @@ ipcMain.handle('get-audio-sources', async () => {
              name.includes('conference');
     });
 
-    console.log('🎙️ Available audio sources:', audioSources.map(s => s.name));
+    logger.debug('🎙️ Available audio sources:', audioSources.map(s => s.name));
     return { success: true, sources: audioSources };
   } catch (error) {
-    console.error('❌ Failed to get audio sources:', error);
+    logger.error('❌ Failed to get audio sources:', error);
     return { success: false, error: error.message, sources: [] };
   }
 });
@@ -510,7 +511,7 @@ ipcMain.handle('get-audio-sources', async () => {
 // Deepgram transcription handlers
 ipcMain.handle('deepgram-start', async (event, apiKey) => {
   try {
-    console.log(`🎙️ Starting Deepgram transcription for client calls (mic + system)...`);
+    logger.debug(`🎙️ Starting Deepgram transcription for client calls (mic + system)...`);
     deepgramService.initialize(apiKey);
     deepgramService.setAudioMode('both'); // Always use both for client calls
     await deepgramService.connect();
@@ -523,13 +524,13 @@ ipcMain.handle('deepgram-start', async (event, apiKey) => {
     
     return { success: true };
   } catch (error) {
-    console.error('❌ Failed to start Deepgram:', error);
+    logger.error('❌ Failed to start Deepgram:', error);
     return { success: false, error: error.message };
   }
 });
 
 ipcMain.handle('deepgram-stop', () => {
-  console.log('🛑 Stopping Deepgram transcription...');
+  logger.debug('🛑 Stopping Deepgram transcription...');
   if (dualAudioCapture) {
     dualAudioCapture.stopCapture();
   }
@@ -541,7 +542,7 @@ ipcMain.handle('deepgram-send-audio', (event, audioData) => {
   // Log every 100th packet to track audio flow
   global.audioPacketCount = (global.audioPacketCount || 0) + 1;
   if (global.audioPacketCount % 100 === 0) {
-    console.log(`📡 Main process received ${global.audioPacketCount} audio packets (latest: ${audioData.byteLength} bytes)`);
+    logger.debug(`📡 Main process received ${global.audioPacketCount} audio packets (latest: ${audioData.byteLength} bytes)`);
   }
   
   if (dualAudioCapture && dualAudioCapture.isCapturing) {
@@ -549,11 +550,11 @@ ipcMain.handle('deepgram-send-audio', (event, audioData) => {
   } else if (deepgramService) {
     deepgramService.sendAudioData(audioData);
   } else {
-    console.warn('⚠️ No audio service available to send data to');
+    logger.warn('⚠️ No audio service available to send data to');
   }
   return { success: true };
 });
 
-console.log('🚀 AI Sales Assistant - Native Desktop App Started');
-console.log(`📱 Platform: ${process.platform}`);
-console.log(`🔧 Dev Mode: ${isDev}`);
+logger.debug('🚀 AI Sales Assistant - Native Desktop App Started');
+logger.debug(`📱 Platform: ${process.platform}`);
+logger.debug(`🔧 Dev Mode: ${isDev}`);

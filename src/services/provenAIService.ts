@@ -1,3 +1,5 @@
+import logger from '../utils/logger';
+
 /**
  * Proven AI Service - Matches the exact working approach from original app
  * Uses the same prompts and methods that were proven to work reliably
@@ -47,13 +49,13 @@ class ProvenAIService {
     }
 
     try {
-      console.log('🤖 Sending to AI:', params.message.substring(0, 100) + '...');
+      logger.debug('🤖 Sending to AI:', params.message.substring(0, 100) + '...');
       
       // For now, use direct API call implementation
       // TODO: Add sendChatMessage to Electron API for better integration
       return await this.directAPICall(params);
     } catch (error) {
-      console.error('❌ AI service error:', error);
+      logger.error('❌ AI service error:', error);
       throw error;
     }
   }
@@ -142,7 +144,7 @@ If no clear actionable tasks are found, respond with: []`;
             priority: todo.priority || 'medium'
           }));
         } catch (parseError) {
-          console.error('❌ Error parsing todos:', parseError);
+          logger.error('❌ Error parsing todos:', parseError);
           
           // Fallback: Use response as single todo
           const cleanResponse = response.response.trim();
@@ -158,7 +160,7 @@ If no clear actionable tasks are found, respond with: []`;
       }
       return [];
     } catch (error) {
-      console.error('❌ Todo detection failed:', error);
+      logger.error('❌ Todo detection failed:', error);
       return [];
     }
   }
@@ -183,7 +185,7 @@ If no clear actionable tasks are found, respond with: []`;
       }
       return null;
     } catch (error) {
-      console.error('❌ Quick suggestion failed:', error);
+      logger.error('❌ Quick suggestion failed:', error);
       return null;
     }
   }

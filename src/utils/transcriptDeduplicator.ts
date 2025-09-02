@@ -1,3 +1,5 @@
+import logger from './logger';
+
 /**
  * TranscriptDeduplicator - Advanced deduplication for transcripts
  * Based on the proven approach from the original SmartCallMate app
@@ -25,11 +27,11 @@ class TranscriptDeduplicator {
     const now = Date.now();
 
     // Log for debugging
-    console.log(`[Dedup] RAW Input: "${cleanText}" (interim: ${isInterim})`);
+    logger.debug(`[Dedup] RAW Input: "${cleanText}" (interim: ${isInterim})`);
 
     // Skip if identical to last processed (within 25ms) - allow more live updates  
     if (cleanText === this.lastCleanTranscript && now - this.lastProcessedTime < 25) {
-      console.log('[Dedup] Skipped - identical to last (within 25ms)');
+      logger.debug('[Dedup] Skipped - identical to last (within 25ms)');
       return null;
     }
 
@@ -48,7 +50,7 @@ class TranscriptDeduplicator {
     // Step 5: Final cleanup
     cleanText = cleanText.replace(/\s+/g, ' ').trim();
 
-    console.log(`[Dedup] CLEAN Output: "${cleanText}"`);
+    logger.debug(`[Dedup] CLEAN Output: "${cleanText}"`);
 
     // Check if result is meaningful
     if (!cleanText || cleanText.length < 2) {
@@ -57,7 +59,7 @@ class TranscriptDeduplicator {
 
     // Check against recent history for final transcripts
     if (!isInterim && this.isDuplicateOfRecent(cleanText)) {
-      console.log('[Dedup] Skipped as duplicate of recent');
+      logger.debug('[Dedup] Skipped as duplicate of recent');
       return null;
     }
 
@@ -216,14 +218,14 @@ class TranscriptDeduplicator {
     
     for (const recent of this.recentTranscripts) {
       if (recent === normalized) {
-        console.log('[Dedup] Exact duplicate found in history');
+        logger.debug('[Dedup] Exact duplicate found in history');
         return true;
       }
       
       // Only filter if it's a small substring (less than 50% of original)
       // This prevents filtering valid partial sentences
       if (recent.includes(normalized) && normalized.length < recent.length * 0.5) {
-        console.log('[Dedup] Small substring of recent transcript');
+        logger.debug('[Dedup] Small substring of recent transcript');
         return true;
       }
     }

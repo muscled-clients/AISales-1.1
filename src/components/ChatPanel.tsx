@@ -1,3 +1,4 @@
+import logger from '../utils/logger';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useAppStore } from '../stores/appStore';
 import { aiService } from '../services/aiService';
@@ -24,10 +25,10 @@ const ChatPanel: React.FC = () => {
 
   // Debug chat history changes
   React.useEffect(() => {
-    console.log('🗨️ Chat history changed in ChatPanel, total messages:', chatHistory.length);
+    logger.debug('🗨️ Chat history changed in ChatPanel, total messages:', chatHistory.length);
     if (chatHistory.length > 0) {
       const lastMessage = chatHistory[chatHistory.length - 1];
-      console.log('🗨️ Last message:', lastMessage.role, lastMessage.content.substring(0, 50) + '...');
+      logger.debug('🗨️ Last message:', lastMessage.role, lastMessage.content.substring(0, 50) + '...');
     }
   }, [chatHistory]);
 
@@ -37,7 +38,7 @@ const ChatPanel: React.FC = () => {
     try {
       await sendChatMessage(message);
     } catch (error) {
-      console.error('Chat error:', error);
+      logger.error('Chat error:', error);
     } finally {
       setIsLoading(false);
     }
@@ -49,7 +50,7 @@ const ChatPanel: React.FC = () => {
     try {
       await sendTranscriptAsMessage(text);
     } catch (error) {
-      console.error('Transcript message error:', error);
+      logger.error('Transcript message error:', error);
     } finally {
       setIsLoading(false);
     }
@@ -90,7 +91,7 @@ const ChatPanel: React.FC = () => {
         lastTranscript: transcripts.length > 0 ? transcripts[transcripts.length - 1].text : 'None'
       };
       
-      console.log('🐛 AI Debug Info:', debugInfo);
+      logger.debug('🐛 AI Debug Info:', debugInfo);
       
       // Add debug info to chat
       const { addChatMessage } = useAppStore.getState();
@@ -115,7 +116,7 @@ const ChatPanel: React.FC = () => {
       
       try {
         const result = await useAppStore.getState().triggerAISuggestions();
-        console.log('Manual trigger result:', result);
+        logger.debug('Manual trigger result:', result);
         
         if (result.success) {
           setAiStatus('✅ AI suggestions working!');

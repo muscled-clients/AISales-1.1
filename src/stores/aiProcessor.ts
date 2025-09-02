@@ -1,4 +1,5 @@
 // AI Processor for real-time transcript analysis
+import logger from '../utils/logger';
 import { aiService } from '../services/aiService';
 import { Todo } from '../types';
 
@@ -28,20 +29,20 @@ class AIProcessor {
   ) {
     // Skip if AI not ready or text too similar to last processed
     if (!aiService.isReady() || !settings.openaiKey) {
-      console.log('⚠️ AI not ready or no API key');
+      logger.debug('⚠️ AI not ready or no API key');
       return;
     }
 
     // Avoid processing duplicates
     if (this.state.lastProcessedText === text) {
-      console.log('⏭️ Skipping duplicate text');
+      logger.debug('⏭️ Skipping duplicate text');
       return;
     }
 
     // Check minimum time between processing (reduced for real-time)
     const timeSinceLastProcess = Date.now() - this.state.lastProcessingTime;
     if (timeSinceLastProcess < 500 && this.state.isProcessing) {
-      console.log('⏳ Still processing previous request');
+      logger.debug('⏳ Still processing previous request');
       return;
     }
 
@@ -55,7 +56,7 @@ class AIProcessor {
     this.state.lastProcessedText = text;
     this.state.lastProcessingTime = Date.now();
 
-    console.log('🚀 Processing transcript in real-time:', text.substring(0, 50) + '...');
+    logger.debug('🚀 Processing transcript in real-time:', text.substring(0, 50) + '...');
 
     try {
       // Process todos and suggestions in parallel for speed
@@ -66,7 +67,7 @@ class AIProcessor {
         promises.push(
           aiService.detectTodos(text).then(todos => {
             if (todos && todos.length > 0) {
-              console.log(`✅ Found ${todos.length} todos`);
+              logger.debug(`✅ Found ${todos.length} todos`);
               todos.forEach(todo => {
                 callbacks.onTodo({
                   text: todo.text,
@@ -76,7 +77,7 @@ class AIProcessor {
                 });
               });
             }
-          }).catch(err => console.error('❌ Todo detection failed:', err))
+          }).catch(err => logger.error('❌ Todo detection failed:', err))
         );
       }
 
@@ -90,10 +91,10 @@ class AIProcessor {
         promises.push(
           this.generateContextualResponse(text, fullContext, responseType).then(response => {
             if (response) {
-              console.log('💡 Generated response:', response.substring(0, 50) + '...');
+              logger.debug('💡 Generated response:', response.substring(0, 50) + '...');
               callbacks.onSuggestion(response);
             }
-          }).catch(err => console.error('❌ Suggestion generation failed:', err))
+          }).catch(err => logger.error('❌ Suggestion generation failed:', err))
         );
       }
 
@@ -101,7 +102,7 @@ class AIProcessor {
       await Promise.all(promises);
       
     } catch (error) {
-      console.error('❌ AI processing error:', error);
+      logger.error('❌ AI processing error:', error);
     } finally {
       this.state.isProcessing = false;
     }
@@ -161,7 +162,7 @@ class AIProcessor {
       
       return null;
     } catch (error) {
-      console.error('Error generating contextual response:', error);
+      logger.error('Error generating contextual response:', error);
       return null;
     }
   }

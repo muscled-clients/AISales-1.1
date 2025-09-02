@@ -1,3 +1,5 @@
+import logger from '../utils/logger';
+
 /**
  * Native Audio Capture Service - Enhanced for Desktop
  * Combines WebAudio API with native Electron capabilities
@@ -35,7 +37,7 @@ export class NativeAudioCaptureService {
   private onStatusCallback?: (status: string) => void;
 
   constructor() {
-    console.log('🎙️ NativeAudioCaptureService initialized');
+    logger.debug('🎙️ NativeAudioCaptureService initialized');
     this.initializePlatformInfo();
   }
 
@@ -46,10 +48,10 @@ export class NativeAudioCaptureService {
     try {
       if (window.electronAPI) {
         this.platform = await window.electronAPI.getPlatform();
-        console.log(`🖥️ Platform detected: ${this.platform}`);
+        logger.debug(`🖥️ Platform detected: ${this.platform}`);
       }
     } catch (error) {
-      console.warn('Failed to get platform info:', error);
+      logger.warn('Failed to get platform info:', error);
     }
   }
 
@@ -73,7 +75,7 @@ export class NativeAudioCaptureService {
         systemAudio: false
       };
     } catch (error) {
-      console.error('Permission check failed:', error);
+      logger.error('Permission check failed:', error);
       return { microphone: false, systemAudio: false };
     }
   }
@@ -107,7 +109,7 @@ export class NativeAudioCaptureService {
         return { microphone: false, systemAudio: false };
       }
     } catch (error) {
-      console.error('Permission request failed:', error);
+      logger.error('Permission request failed:', error);
       throw error;
     }
   }
@@ -145,12 +147,12 @@ export class NativeAudioCaptureService {
             });
           }
         } catch (error) {
-          console.warn('Failed to get system audio sources:', error);
+          logger.warn('Failed to get system audio sources:', error);
         }
       }
       
     } catch (error) {
-      console.error('Failed to enumerate audio sources:', error);
+      logger.error('Failed to enumerate audio sources:', error);
     }
     
     return sources;
@@ -161,14 +163,14 @@ export class NativeAudioCaptureService {
    */
   async startCapture(options: Partial<AudioCaptureOptions> = {}): Promise<boolean> {
     if (this.isCapturing) {
-      console.warn('Audio capture already in progress');
+      logger.warn('Audio capture already in progress', );
       return false;
     }
 
     const config = { ...this.defaultOptions, ...options };
     
     try {
-      console.log('🎤 Starting enhanced audio capture...');
+      logger.debug('🎤 Starting enhanced audio capture...');
       this.updateStatus('Starting audio capture...');
       
       // Check permissions first
@@ -210,14 +212,14 @@ export class NativeAudioCaptureService {
         });
       }
 
-      console.log('✅ Enhanced audio capture started successfully');
-      console.log(`📊 Config: ${config.sampleRate}Hz, ${config.bufferSize} buffer`);
-      console.log(`🎙️ Microphone: ${config.includeMicrophone ? 'enabled' : 'disabled'}`);
-      console.log(`🔊 System Audio: ${config.includeSystemAudio ? 'enabled' : 'disabled'}`);
+      logger.debug('✅ Enhanced audio capture started successfully');
+      logger.debug(`📊 Config: ${config.sampleRate}Hz, ${config.bufferSize} buffer`);
+      logger.debug(`🎙️ Microphone: ${config.includeMicrophone ? 'enabled' : 'disabled'}`);
+      logger.debug(`🔊 System Audio: ${config.includeSystemAudio ? 'enabled' : 'disabled'}`);
       
       return true;
     } catch (error) {
-      console.error('❌ Failed to start enhanced audio capture:', error);
+      logger.error('❌ Failed to start enhanced audio capture:', error);
       this.cleanup();
       
       if (this.onErrorCallback) {
@@ -232,7 +234,7 @@ export class NativeAudioCaptureService {
    * Start microphone capture
    */
   private async startMicrophoneCapture(config: AudioCaptureOptions): Promise<void> {
-    console.log('🎤 Starting microphone capture...');
+    logger.debug('🎤 Starting microphone capture...');
     
     try {
       // Request microphone permission first
@@ -246,8 +248,8 @@ export class NativeAudioCaptureService {
         }
       });
 
-      console.log('✅ Microphone permission granted, stream obtained');
-      console.log('🔊 Audio tracks:', stream.getAudioTracks().length);
+      logger.debug('✅ Microphone permission granted, stream obtained');
+      logger.debug('🔊 Audio tracks:', stream.getAudioTracks().length);
       
       if (stream.getAudioTracks().length === 0) {
         throw new Error('No audio tracks found in stream');
@@ -255,18 +257,18 @@ export class NativeAudioCaptureService {
 
       this.mediaStream = stream;
       this.microphoneSource = this.audioContext!.createMediaStreamSource(this.mediaStream);
-      console.log('✅ Microphone source created successfully');
+      logger.debug('✅ Microphone source created successfully');
       
       // Test if the audio context is running
       if (this.audioContext!.state === 'suspended') {
-        console.log('🔄 Audio context suspended, resuming...');
+        logger.debug('🔄 Audio context suspended, resuming...');
         await this.audioContext!.resume();
       }
       
-      console.log('🔊 Audio context state:', this.audioContext!.state);
+      logger.debug('🔊 Audio context state:', this.audioContext!.state);
       
     } catch (error) {
-      console.error('❌ Failed to start microphone capture:', error);
+      logger.error('❌ Failed to start microphone capture:', error);
       throw error;
     }
   }
@@ -276,7 +278,7 @@ export class NativeAudioCaptureService {
    */
   private async startSystemAudioCapture(config: AudioCaptureOptions): Promise<void> {
     try {
-      console.log('🔊 Starting system audio capture...');
+      logger.debug('🔊 Starting system audio capture...');
       
       // This is a placeholder for future native implementation
       // For now, we'll use screen capture with audio
@@ -293,11 +295,11 @@ export class NativeAudioCaptureService {
 
         if (systemStream.getAudioTracks().length > 0) {
           this.systemAudioSource = this.audioContext!.createMediaStreamSource(systemStream);
-          console.log('✅ System audio source created');
+          logger.debug('✅ System audio source created');
         }
       }
     } catch (error) {
-      console.warn('⚠️ System audio capture not available:', error);
+      logger.warn('⚠️ System audio capture not available:', error);
       // Don't fail the entire capture if system audio fails
     }
   }
@@ -355,17 +357,17 @@ export class NativeAudioCaptureService {
       // Log every 50th packet to avoid console spam but show activity
       audioPacketCount++;
       if (audioPacketCount % 50 === 0) {
-        console.log(`🎵 Audio packet ${audioPacketCount}, size: ${int16Buffer.buffer.byteLength} bytes, volume: ${volume.toFixed(4)}`);
-        console.log(`🎵 Raw audio sample (first 10): [${Array.from(inputData.slice(0, 10)).map(x => x.toFixed(3)).join(', ')}]`);
-        console.log(`🎵 Converted sample (first 10): [${Array.from(int16Buffer.slice(0, 10)).join(', ')}]`);
+        logger.debug(`🎵 Audio packet ${audioPacketCount}, size: ${int16Buffer.buffer.byteLength} bytes, volume: ${volume.toFixed(4)}`);
+        logger.debug(`🎵 Raw audio sample (first 10): [${Array.from(inputData.slice(0, 10)).map((x: number) => x.toFixed(3)).join(', ')}]`);
+        logger.debug(`🎵 Converted sample (first 10): [${Array.from(int16Buffer.slice(0, 10)).join(', ')}]`);
       }
       
       // Check if we're getting any audio signal
       if (audioPacketCount % 200 === 0) {
         if (volume > 0.001) {
-          console.log(`🔊 AUDIO DETECTED - Volume level: ${volume.toFixed(4)}`);
+          logger.debug(`🔊 AUDIO DETECTED - Volume level: ${volume.toFixed(4)}`);
         } else {
-          console.warn(`🔇 NO AUDIO SIGNAL - Volume level: ${volume.toFixed(4)} (mic might be muted or not working)`);
+          logger.warn('🔇 NO AUDIO SIGNAL - Volume level: ${volume.toFixed(4)} (mic might be muted or not working)', );
         }
       }
       
@@ -375,10 +377,10 @@ export class NativeAudioCaptureService {
         
         // First time sending audio
         if (audioPacketCount === 1) {
-          console.log('✅ First audio packet sent to callback successfully');
+          logger.debug('✅ First audio packet sent to callback successfully');
         }
       } else {
-        console.warn('⚠️ No audio callback set!');
+        logger.warn('⚠️ No audio callback set!', );
       }
     };
   }
@@ -388,11 +390,11 @@ export class NativeAudioCaptureService {
    */
   async stopCapture(): Promise<void> {
     if (!this.isCapturing) {
-      console.warn('No audio capture in progress');
+      logger.warn('No audio capture in progress', );
       return;
     }
 
-    console.log('🛑 Stopping enhanced audio capture...');
+    logger.debug('🛑 Stopping enhanced audio capture...');
     this.isCapturing = false;
     this.updateStatus('Stopping audio capture...');
     
@@ -408,7 +410,7 @@ export class NativeAudioCaptureService {
     }
     
     this.updateStatus('Audio capture stopped');
-    console.log('✅ Enhanced audio capture stopped');
+    logger.debug('✅ Enhanced audio capture stopped');
   }
 
   /**
@@ -472,7 +474,7 @@ export class NativeAudioCaptureService {
 
     // Close audio context
     if (this.audioContext) {
-      this.audioContext.close().catch(console.error);
+      this.audioContext.close().catch((error) => logger.error('Failed to close audio context:', error));
       this.audioContext = null;
     }
 
@@ -480,7 +482,7 @@ export class NativeAudioCaptureService {
     if (this.mediaStream) {
       this.mediaStream.getTracks().forEach(track => {
         track.stop();
-        console.log(`🔇 Stopped track: ${track.kind}`);
+        logger.debug(`🔇 Stopped track: ${track.kind}`);
       });
       this.mediaStream = null;
     }

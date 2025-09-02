@@ -9,6 +9,7 @@ import { aiService } from '../services/aiService';
 import { improvedAIProcessor } from './improvedAIProcessor';
 import { transcriptDeduplicator } from '../utils/transcriptDeduplicator';
 import { transcriptDeduplicator as efficientDeduplicator } from '../utils/transcriptDeduplication';
+import logger from '../utils/logger';
 
 interface AppState {
   // Recording
@@ -30,9 +31,11 @@ interface AppState {
   // UI State (removed activePanel - showing all panels simultaneously)
   selectedContext: string[];
   showSettings: boolean;
+  showTodos: boolean;
   
   // Actions
   setShowSettings: (show: boolean) => void;
+  setShowTodos: (show: boolean) => void;
   setRecording: (recording: RecordingState) => void;
   startRecording: () => Promise<boolean>;
   stopRecording: () => Promise<void>;
@@ -70,6 +73,7 @@ export const useAppStore = create<AppState>()(
     pendingAITimeout: null,
     selectedContext: [],
     showSettings: false,
+    showTodos: false,
     settings: {
       deepgramKey: '',
       openaiKey: '',
@@ -86,19 +90,23 @@ export const useAppStore = create<AppState>()(
       state.showSettings = show;
     }),
     
+    setShowTodos: (show) => set((state) => {
+      state.showTodos = show;
+    }),
+    
     setRecording: (recording) => set((state) => {
       state.recording = recording;
     }),
 
     initializeServices: async () => {
-      console.log('🚀 Initializing audio and AI services...');
+      logger.debug('🚀 Initializing audio and AI services...');
       
       // Load settings from Electron storage first
       if (window.electronAPI) {
         try {
-          console.log('📂 Loading settings from Electron storage...');
+          logger.debug('📂 Loading settings from Electron storage...');
           const savedSettings = await window.electronAPI.getAllSettings();
-          console.log('📋 Loaded settings:', {
+          logger.debug('📋 Loaded settings:', {
             hasDeepgramKey: !!savedSettings?.deepgramKey,
             hasOpenAIKey: !!savedSettings?.openaiKey,
             deepgramKeyLength: savedSettings?.deepgramKey?.length || 0,
@@ -110,35 +118,35 @@ export const useAppStore = create<AppState>()(
             set((state) => {
               state.settings = { ...state.settings, ...savedSettings };
             });
-            console.log('✅ Settings applied to store');
+            logger.debug('✅ Settings applied to store');
             
             // Initialize AI service immediately after loading settings
             if (savedSettings.openaiKey) {
-              console.log('🤖 Initializing AI service with loaded key...');
+              logger.debug('🤖 Initializing AI service with loaded key...');
               aiService.initialize(savedSettings.openaiKey);
-              console.log('🤖 AI service initialized and ready:', aiService.isReady());
-              console.log('🤖 Settings after loading:', {
+              logger.debug('🤖 AI service initialized and ready:', aiService.isReady());
+              logger.debug('🤖 Settings after loading:', {
                 autoSuggestions: savedSettings.autoSuggestions,
                 autoTodos: savedSettings.autoTodos,
                 hasOpenAI: !!savedSettings.openaiKey
               });
             }
           } else {
-            console.log('⚠️ No valid settings found in storage');
+            logger.warn('⚠️ No valid settings found in storage');
           }
         } catch (error) {
-          console.error('❌ Failed to load settings:', error);
+          logger.error('❌ Failed to load settings:', error);
         }
       } else {
-        console.warn('⚠️ Electron API not available');
+        logger.warn('⚠️ Electron API not available');
       }
       
       // Set up transcription service callbacks
-      console.log('🔗 Setting up transcript callback...');
+      logger.debug('🔗 Setting up transcript callback...');
       electronTranscriptionService.setOnTranscript((result) => {
         const { addTranscript, settings } = useAppStore.getState();
         
-        console.log('📝 Raw transcript received:', {
+        logger.debug('📝 Raw transcript received:', {
           text: result.text,
           isInterim: result.isInterim,
           length: result.text.length
@@ -148,13 +156,13 @@ export const useAppStore = create<AppState>()(
         const cleanedText = transcriptDeduplicator.clean(result.text, result.isInterim);
         
         if (!cleanedText) {
-          console.log('⏭️ Transcript filtered out by deduplicator');
+          logger.debug('⏭️ Transcript filtered out by deduplicator');
           return;
         }
 
         // Only process final transcripts for display and AI processing
         if (!result.isInterim) {
-          console.log('✅ Adding cleaned transcript:', cleanedText);
+          logger.debug('✅ Adding cleaned transcript:', cleanedText);
           
           // Add to transcript store
           addTranscript({
@@ -173,7 +181,7 @@ export const useAppStore = create<AppState>()(
             !/^(hi|hello|okay|yes|no|um|uh|ah|oh|well)$/i.test(cleanedText) // Not just greetings
           );
 
-          console.log('📊 AI Check:', {
+          logger.debug('📊 AI Check:', {
             text: cleanedText.substring(0, 50) + '...',
             wordCount: words.length,
             charLength: cleanedText.length,
@@ -185,7 +193,7 @@ export const useAppStore = create<AppState>()(
           });
 
           if (isMeaningful) {
-            console.log('🎯 Processing with AI:', cleanedText.substring(0, 50) + '...');
+            logger.debug('🎯 Processing with AI:', cleanedText.substring(0, 50) + '...');
             
             // Use improved AI processor with proven approach
             improvedAIProcessor.processTranscript(
@@ -193,12 +201,12 @@ export const useAppStore = create<AppState>()(
               settings,
               {
                 onTodo: (todo) => {
-                  console.log('➕ Adding todo:', todo.text);
+                  logger.debug('➕ Adding todo:', todo.text);
                   const { addTodo } = useAppStore.getState();
                   addTodo(todo);
                 },
                 onSuggestion: (message) => {
-                  console.log('💡 Adding AI response');
+                  logger.debug('💡 Adding AI response');
                   const { addChatMessage } = useAppStore.getState();
                   addChatMessage({
                     role: 'assistant',
@@ -211,7 +219,7 @@ export const useAppStore = create<AppState>()(
           }
         } else {
           // For interim transcripts, just log but don't process  
-          console.log('📝 Interim transcript cleaned:', cleanedText);
+          logger.debug('📝 Interim transcript cleaned:', cleanedText);
         }
       });
 
@@ -228,24 +236,24 @@ export const useAppStore = create<AppState>()(
 
       // Set up error handlers
       nativeAudioCaptureService.setOnError((error) => {
-        console.error('🎤 Native audio capture error:', error);
+        logger.error('🎤 Native audio capture error:', error);
       });
 
       // Set up status updates
       nativeAudioCaptureService.setOnStatus((status) => {
-        console.log('🔊 Audio status:', status);
+        logger.debug('🔊 Audio status:', status);
       });
 
       electronTranscriptionService.setOnError((error) => {
-        console.error('📝 Transcription error:', error);
+        logger.error('📝 Transcription error:', error);
       });
 
-      console.log('✅ Services initialized');
+      logger.debug('✅ Services initialized');
     },
 
     startRecording: async () => {
       try {
-        console.log('🎬 Starting recording session...');
+        logger.debug('🎬 Starting recording session...');
         
         // First, ensure services are initialized (which loads settings)
         const { initializeServices } = useAppStore.getState();
@@ -254,7 +262,7 @@ export const useAppStore = create<AppState>()(
         // Now get the updated settings after initialization
         const { settings } = useAppStore.getState();
         
-        console.log('📋 Current settings after initialization:', {
+        logger.debug('📋 Current settings after initialization:', {
           hasDeepgramKey: !!settings.deepgramKey,
           hasOpenAIKey: !!settings.openaiKey,
           deepgramKeyLength: settings.deepgramKey?.length || 0,
@@ -263,59 +271,59 @@ export const useAppStore = create<AppState>()(
 
         // Initialize AI service with the loaded settings
         if (settings.openaiKey) {
-          console.log('🤖 Initializing AI service with key:', settings.openaiKey.substring(0, 10) + '...');
+          logger.debug('🤖 Initializing AI service with key:', settings.openaiKey.substring(0, 10) + '...');
           aiService.initialize(settings.openaiKey);
-          console.log('🤖 AI service ready:', aiService.isReady());
+          logger.debug('🤖 AI service ready:', aiService.isReady());
         } else {
-          console.log('⚠️ No OpenAI key configured - AI features will not work');
+          logger.warn('⚠️ No OpenAI key configured - AI features will not work');
         }
 
         // Initialize Electron transcription service
         if (settings.deepgramKey) {
-          console.log('🎙️ Initializing Electron transcription service with key:', settings.deepgramKey.substring(0, 10) + '...');
+          logger.debug('🎙️ Initializing Electron transcription service with key:', settings.deepgramKey.substring(0, 10) + '...');
           electronTranscriptionService.initialize(settings.deepgramKey);
         } else {
-          console.error('❌ No Deepgram API key found in settings');
+          logger.error('❌ No Deepgram API key found in settings');
           throw new Error('Please configure your Deepgram API key in Settings');
         }
 
         // Always capture both mic + system for client calls
-        console.log('🎤 Starting dual audio capture (mic + system) for client calls...');
-        console.log('📋 Current settings:', settings);
+        logger.debug('🎤 Starting dual audio capture (mic + system) for client calls...');
+        logger.debug('📋 Current settings:', settings);
         
         // Start the transcription service (always uses both mode)
-        console.log('📝 Step 1: Starting Electron transcription service...');
+        logger.debug('📝 Step 1: Starting Electron transcription service...');
         const transcriptionStarted = await electronTranscriptionService.startTranscription();
-        console.log('📝 Transcription service result:', transcriptionStarted);
+        logger.debug('📝 Transcription service result:', transcriptionStarted);
         
         if (!transcriptionStarted) {
-          console.error('❌ Failed to start transcription service');
+          logger.error('❌ Failed to start transcription service');
           throw new Error('Failed to start transcription service');
         }
-        console.log('✅ Transcription service started successfully');
+        logger.debug('✅ Transcription service started successfully');
         
         // Start microphone capture
-        console.log('🎙️ Step 2: Starting microphone capture...');
+        logger.debug('🎙️ Step 2: Starting microphone capture...');
         const micStarted = await nativeAudioCaptureService.startCapture({
           includeMicrophone: true,
           includeSystemAudio: false,
           sampleRate: 16000,
           bufferSize: 4096
         });
-        console.log('🎙️ Microphone capture result:', micStarted);
+        logger.debug('🎙️ Microphone capture result:', micStarted);
         
         // Focus on reliable microphone capture for now (like working version)
-        console.log('🔊 Step 3: Focusing on reliable microphone capture');
-        console.log('💡 Using proven approach from working SmartCallMate project');
+        logger.debug('🔊 Step 3: Focusing on reliable microphone capture');
+        logger.debug('💡 Using proven approach from working SmartCallMate project');
         let systemStarted = false; // Keeping simple for stability
         
         const audioStarted = micStarted; // At least microphone should work
         
         if (!audioStarted) {
-          console.error('❌ Audio capture failed to start');
+          logger.error('❌ Audio capture failed to start');
           throw new Error('Failed to start audio capture - check microphone permissions');
         }
-        console.log('✅ Audio capture and transcription started successfully');
+        logger.debug('✅ Audio capture and transcription started successfully');
 
         // Update recording state
         set((state) => {
@@ -326,38 +334,38 @@ export const useAppStore = create<AppState>()(
           };
         });
 
-        console.log('✅ Recording started successfully');
+        logger.debug('✅ Recording started successfully');
         return true;
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-        console.error('❌ Failed to start recording:', errorMessage);
-        console.error('Full error details:', error);
+        logger.error('❌ Failed to start recording:', errorMessage);
+        logger.error('Full error details:', error);
         
         // Check if it's a network connectivity issue
         if (errorMessage.includes('ENOTFOUND') || errorMessage.includes('getaddrinfo')) {
-          console.error('🌐 NETWORK CONNECTIVITY ISSUE DETECTED');
-          console.error('📋 Troubleshooting steps:');
-          console.error('   1. ✅ Check internet connection');
-          console.error('   2. 🔄 Try refreshing the app'); 
-          console.error('   3. 🚫 Disable VPN/proxy temporarily');
-          console.error('   4. 🔍 Check if api.deepgram.com is accessible');
-          console.error('   5. 🛡️ Check firewall/antivirus settings');
+          logger.error('🌐 NETWORK CONNECTIVITY ISSUE DETECTED');
+          logger.error('📋 Troubleshooting steps:');
+          logger.error('   1. ✅ Check internet connection');
+          logger.error('   2. 🔄 Try refreshing the app'); 
+          logger.error('   3. 🚫 Disable VPN/proxy temporarily');
+          logger.error('   4. 🔍 Check if api.deepgram.com is accessible');
+          logger.error('   5. 🛡️ Check firewall/antivirus settings');
           
           // Test basic connectivity
           setTimeout(() => {
             fetch('https://www.google.com', { mode: 'no-cors', cache: 'no-cache' })
-              .then(() => console.log('✅ Internet connectivity test: PASSED'))
-              .catch(() => console.log('❌ Internet connectivity test: FAILED'));
+              .then(() => logger.debug('✅ Internet connectivity test: PASSED'))
+              .catch(() => logger.error('❌ Internet connectivity test: FAILED'));
           }, 1000);
         }
         
         // Cleanup on failure
         try {
-          console.log('🧹 Cleaning up after error...');
+          logger.debug('🧹 Cleaning up after error...');
           await nativeAudioCaptureService.stopCapture();
           await electronTranscriptionService.stopTranscription();
         } catch (cleanupError) {
-          console.error('❌ Cleanup failed:', cleanupError);
+          logger.error('❌ Cleanup failed:', cleanupError);
         }
 
         throw new Error(errorMessage);
@@ -366,7 +374,7 @@ export const useAppStore = create<AppState>()(
 
     stopRecording: async () => {
       try {
-        console.log('🛑 Stopping recording session...');
+        logger.debug('🛑 Stopping recording session...');
 
         // Stop audio capture services
         await nativeAudioCaptureService.stopCapture();
@@ -386,9 +394,9 @@ export const useAppStore = create<AppState>()(
           };
         });
 
-        console.log('✅ Recording stopped successfully');
+        logger.debug('✅ Recording stopped successfully');
       } catch (error) {
-        console.error('❌ Failed to stop recording:', error);
+        logger.error('❌ Failed to stop recording:', error);
         throw error;
       }
     },
@@ -401,7 +409,7 @@ export const useAppStore = create<AppState>()(
       
       // OPTIMIZATION: Use O(1) hash-based deduplication instead of O(n²) similarity
       if (efficientDeduplicator.isDuplicate(transcript.text)) {
-        console.log('🚫 Skipping duplicate transcript (hash match)');
+        logger.debug('🚫 Skipping duplicate transcript (hash match)');
         return;
       }
       
@@ -412,13 +420,13 @@ export const useAppStore = create<AppState>()(
       
       // Add to transcripts
       state.transcripts.push(newTranscript);
-      console.log('➕ Added new transcript:', transcript.text.substring(0, 50));
+      logger.debug('➕ Added new transcript:', transcript.text.substring(0, 50));
       
       // OPTIMIZATION: Implement memory bounds to prevent infinite growth
       if (state.transcripts.length > 500) {
         // Keep only the most recent 250 transcripts
         state.transcripts = state.transcripts.slice(-250);
-        console.log('🧹 Cleaned old transcripts, kept last 250');
+        logger.debug('🧹 Cleaned old transcripts, kept last 250');
       }
       
       // Sync to overlay immediately after state update
@@ -530,7 +538,7 @@ export const useAppStore = create<AppState>()(
             timestamp: new Date()
           });
         } catch (error) {
-          console.error('❌ AI response error:', error);
+          logger.error('❌ AI response error:', error);
           addChatMessage({
             role: 'assistant',
             content: '❌ Failed to generate AI response. Please check your OpenAI configuration.',
@@ -582,9 +590,9 @@ export const useAppStore = create<AppState>()(
         ...message,
         id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
       };
-      console.log('💬 Adding message to chat store:', newMessage.content.substring(0, 50) + '...');
+      logger.debug('💬 Adding message to chat store:', newMessage.content.substring(0, 50) + '...');
       state.chatHistory.push(newMessage);
-      console.log('📊 Chat history now has:', state.chatHistory.length, 'messages');
+      logger.debug('📊 Chat history now has:', state.chatHistory.length, 'messages');
       
       // Sync to overlay immediately after state update - NO DELAYS
       if (window.electronAPI && (window.electronAPI as any).syncToOverlay) {
@@ -657,7 +665,7 @@ export const useAppStore = create<AppState>()(
           });
         }
       } catch (error) {
-        console.error('❌ Chat message failed:', error);
+        logger.error('❌ Chat message failed:', error);
         const { addChatMessage } = useAppStore.getState();
         addChatMessage({
           role: 'assistant',
@@ -687,7 +695,7 @@ export const useAppStore = create<AppState>()(
       
       // Re-initialize AI service if OpenAI key changed
       if (newSettings.openaiKey) {
-        console.log('🤖 Re-initializing AI service with updated key...');
+        logger.debug('🤖 Re-initializing AI service with updated key...');
         aiService.initialize(newSettings.openaiKey);
       }
       
@@ -695,9 +703,9 @@ export const useAppStore = create<AppState>()(
       if (window.electronAPI) {
         try {
           await window.electronAPI.updateSettings(mergedSettings);
-          console.log('✅ Settings saved to disk:', mergedSettings);
+          logger.debug('✅ Settings saved to disk:', mergedSettings);
         } catch (error) {
-          console.error('❌ Failed to save settings:', error);
+          logger.error('❌ Failed to save settings:', error);
         }
       }
     },
@@ -706,28 +714,28 @@ export const useAppStore = create<AppState>()(
     triggerAISuggestions: async () => {
       const { transcripts, addSuggestion, addChatMessage, settings } = useAppStore.getState();
       
-      console.log('🧪 Manual AI suggestions trigger called');
-      console.log('Settings:', { autoSuggestions: settings.autoSuggestions, hasOpenAI: !!settings.openaiKey });
-      console.log('AI Ready:', aiService.isReady());
+      logger.debug('🧪 Manual AI suggestions trigger called');
+      logger.debug('Settings:', { autoSuggestions: settings.autoSuggestions, hasOpenAI: !!settings.openaiKey });
+      logger.debug('AI Ready:', aiService.isReady());
       
       if (!settings.autoSuggestions) {
-        console.log('⚠️ Auto suggestions disabled in settings');
+        logger.warn('⚠️ Auto suggestions disabled in settings');
         return { success: false, message: 'Auto suggestions disabled' };
       }
       
       if (!aiService.isReady()) {
-        console.log('⚠️ AI service not ready');
+        logger.warn('⚠️ AI service not ready');
         return { success: false, message: 'AI service not ready' };
       }
       
       const recentTranscripts = transcripts.slice(-5);
       if (recentTranscripts.length === 0) {
-        console.log('⚠️ No transcripts to analyze');
+        logger.warn('⚠️ No transcripts to analyze');
         return { success: false, message: 'No transcripts available' };
       }
       
       const contextText = recentTranscripts.map(t => t.text).join(' ');
-      console.log('🔍 Manually triggering AI suggestions for context:', contextText.substring(0, 100));
+      logger.debug('🔍 Manually triggering AI suggestions for context:', contextText.substring(0, 100));
       
       try {
         const insights = await aiService.generateInsights({
@@ -736,7 +744,7 @@ export const useAppStore = create<AppState>()(
           context: recentTranscripts.map(t => `${t.speaker || 'user'}: ${t.text}`)
         });
         
-        console.log('✅ Manual AI suggestions generated:', insights);
+        logger.debug('✅ Manual AI suggestions generated:', insights);
         
         if (insights && insights.length > 0) {
           insights.forEach(insight => {
@@ -758,7 +766,7 @@ export const useAppStore = create<AppState>()(
           return { success: false, message: 'No insights generated' };
         }
       } catch (error: unknown) {
-        console.error('❌ Manual AI suggestions failed:', error);
+        logger.error('❌ Manual AI suggestions failed:', error);
         const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
         return { success: false, message: errorMessage };
       }

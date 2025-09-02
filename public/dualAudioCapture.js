@@ -1,3 +1,4 @@
+const logger = require('./logger');
 const { desktopCapturer } = require('electron');
 
 class DualAudioCapture {
@@ -11,12 +12,12 @@ class DualAudioCapture {
 
   async startCapture(mode = 'both') {
     if (this.isCapturing) {
-      console.log('⚠️ Capture already in progress');
+      logger.debug('⚠️ Capture already in progress');
       return false;
     }
 
     try {
-      console.log(`🎤 Starting dual audio capture in ${mode} mode...`);
+      logger.debug(`🎤 Starting dual audio capture in ${mode} mode...`);
       
       // For microphone-only mode, just capture mic
       if (mode === 'microphone') {
@@ -32,13 +33,13 @@ class DualAudioCapture {
         });
         
         if (!sources || sources.length === 0) {
-          console.error('❌ No audio sources available');
+          logger.error('❌ No audio sources available');
           return false;
         }
         
         // Use the entire screen as default source
         const source = sources.find(s => s.name === 'Entire screen') || sources[0];
-        console.log(`🔊 Using audio source: ${source.name}`);
+        logger.debug(`🔊 Using audio source: ${source.name}`);
         
         // For both mode, also start microphone capture
         if (mode === 'both') {
@@ -47,16 +48,16 @@ class DualAudioCapture {
         
         // Note: System audio capture requires special handling in Electron
         // For now, we'll rely on microphone to capture both sides of conversation
-        console.log('ℹ️ System audio capture requires screen recording permissions');
-        console.log('💡 Make sure to grant screen recording access for full audio capture');
+        logger.debug('ℹ️ System audio capture requires screen recording permissions');
+        logger.debug('💡 Make sure to grant screen recording access for full audio capture');
       }
       
       this.isCapturing = true;
-      console.log('✅ Audio capture started');
+      logger.debug('✅ Audio capture started');
       return true;
       
     } catch (error) {
-      console.error('❌ Failed to start dual audio capture:', error);
+      logger.error('❌ Failed to start dual audio capture:', error);
       this.stopCapture();
       return false;
     }
@@ -64,26 +65,26 @@ class DualAudioCapture {
   
   async startMicrophoneCapture() {
     try {
-      console.log('🎤 Starting microphone capture...');
+      logger.debug('🎤 Starting microphone capture...');
       
       // In Electron main process, we don't have direct access to getUserMedia
       // Audio should be captured in the renderer process and sent via IPC
       // For now, we'll just ensure the WebSocket is ready
       
       // Note: Real audio data should be sent from renderer process
-      console.log('ℹ️ Microphone capture ready, waiting for audio data from renderer...');
+      logger.debug('ℹ️ Microphone capture ready, waiting for audio data from renderer...');
       
       return true;
     } catch (error) {
-      console.error('❌ Failed to start microphone capture:', error);
+      logger.error('❌ Failed to start microphone capture:', error);
       return false;
     }
   }
   
   stopCapture() {
-    console.log('🛑 Stopping dual audio capture...');
+    logger.debug('🛑 Stopping dual audio capture...');
     this.isCapturing = false;
-    console.log('✅ Audio capture stopped');
+    logger.debug('✅ Audio capture stopped');
   }
   
   sendAudioData(audioData) {

@@ -1,3 +1,4 @@
+const logger = require('./logger');
 const { desktopCapturer } = require('electron');
 
 class AudioManager {
@@ -35,10 +36,10 @@ class AudioManager {
                source.name.toLowerCase().includes('browser');
       });
 
-      console.log('🎙️ Available audio sources:', this.audioSources.map(s => s.name));
+      logger.debug('🎙️ Available audio sources:', this.audioSources.map(s => s.name));
       return this.audioSources;
     } catch (error) {
-      console.error('❌ Failed to get audio sources:', error);
+      logger.error('❌ Failed to get audio sources:', error);
       return [];
     }
   }
@@ -47,17 +48,17 @@ class AudioManager {
     try {
       const devices = await navigator.mediaDevices.enumerateDevices();
       const microphones = devices.filter(device => device.kind === 'audioinput');
-      console.log('🎤 Available microphones:', microphones.map(m => m.label));
+      logger.debug('🎤 Available microphones:', microphones.map(m => m.label));
       return microphones;
     } catch (error) {
-      console.error('❌ Failed to get microphone devices:', error);
+      logger.error('❌ Failed to get microphone devices:', error);
       return [];
     }
   }
 
   async startCapture(mode = 'microphone', options = {}) {
     this.captureMode = mode;
-    console.log(`🎙️ Starting audio capture in mode: ${mode}`);
+    logger.debug(`🎙️ Starting audio capture in mode: ${mode}`);
 
     try {
       // Initialize audio context
@@ -98,7 +99,7 @@ class AudioManager {
 
       return this.mixedStream;
     } catch (error) {
-      console.error('❌ Failed to start audio capture:', error);
+      logger.error('❌ Failed to start audio capture:', error);
       throw error;
     }
   }
@@ -117,10 +118,10 @@ class AudioManager {
       };
 
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      console.log('✅ Microphone captured successfully');
+      logger.debug('✅ Microphone captured successfully');
       return stream;
     } catch (error) {
-      console.error('❌ Failed to capture microphone:', error);
+      logger.error('❌ Failed to capture microphone:', error);
       return null;
     }
   }
@@ -135,7 +136,7 @@ class AudioManager {
       }
 
       if (!sourceId) {
-        console.warn('⚠️ No system audio source selected');
+        logger.warn('⚠️ No system audio source selected');
         return null;
       }
 
@@ -149,11 +150,11 @@ class AudioManager {
         video: false
       });
 
-      console.log('✅ System audio captured successfully');
+      logger.debug('✅ System audio captured successfully');
       return stream;
     } catch (error) {
-      console.error('❌ Failed to capture system audio:', error);
-      console.error('💡 Make sure to allow screen recording permission');
+      logger.error('❌ Failed to capture system audio:', error);
+      logger.error('💡 Make sure to allow screen recording permission');
       return null;
     }
   }
@@ -177,10 +178,10 @@ class AudioManager {
       const destination = this.audioContext.createMediaStreamDestination();
       mixer.connect(destination);
 
-      console.log('✅ Audio streams mixed successfully');
+      logger.debug('✅ Audio streams mixed successfully');
       return destination.stream;
     } catch (error) {
-      console.error('❌ Failed to mix audio streams:', error);
+      logger.error('❌ Failed to mix audio streams:', error);
       throw error;
     }
   }
@@ -207,16 +208,16 @@ class AudioManager {
       source.connect(processor);
       processor.connect(this.audioContext.destination);
       
-      console.log('✅ Audio processing setup for Deepgram');
+      logger.debug('✅ Audio processing setup for Deepgram');
       return processor;
     } catch (error) {
-      console.error('❌ Failed to setup audio processing:', error);
+      logger.error('❌ Failed to setup audio processing:', error);
       throw error;
     }
   }
 
   stopCapture() {
-    console.log('🛑 Stopping audio capture');
+    logger.debug('🛑 Stopping audio capture');
     
     if (this.microphoneStream) {
       this.microphoneStream.getTracks().forEach(track => track.stop());
@@ -238,7 +239,7 @@ class AudioManager {
       this.audioContext = null;
     }
     
-    console.log('✅ Audio capture stopped');
+    logger.debug('✅ Audio capture stopped');
   }
 
   // Get available capture modes based on permissions
@@ -251,7 +252,7 @@ class AudioManager {
       micStream.getTracks().forEach(track => track.stop());
       modes.push({ id: 'microphone', name: 'Microphone Only', icon: '🎤' });
     } catch (error) {
-      console.warn('⚠️ Microphone not available');
+      logger.warn('⚠️ Microphone not available');
     }
     
     try {
@@ -264,7 +265,7 @@ class AudioManager {
         }
       }
     } catch (error) {
-      console.warn('⚠️ System audio not available');
+      logger.warn('⚠️ System audio not available');
     }
     
     return modes;
