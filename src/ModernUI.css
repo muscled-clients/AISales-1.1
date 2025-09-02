@@ -19,10 +19,10 @@
   --text-muted: #94a3b8;
 }
 
-/* Modern Panel Layout - Responsive */
+/* Modern Panel Layout - Two Equal Panels */
 .modern-three-panel {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: 1fr 1fr;
   gap: 16px;
   height: calc(100vh - 140px);
   padding: 16px;
@@ -75,13 +75,10 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  transition: all 0.3s ease;
+  /* Removed transition for cleaner UI */
 }
 
-.modern-panel:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-}
+/* Panel hover effect removed for cleaner UI */
 
 .modern-panel-header {
   padding: 16px 20px;
@@ -198,27 +195,7 @@
   50% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
 }
 
-/* Settings Button - Floating Action Button */
-.modern-settings-btn {
-  position: fixed;
-  bottom: 60px;
-  right: 24px;
-  width: 56px;
-  height: 56px;
-  background: linear-gradient(135deg, var(--primary) 0%, #8b5cf6 100%);
-  border: none;
-  border-radius: 50%;
-  color: white;
-  font-size: 20px;
-  cursor: pointer;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
-  transition: all 0.3s ease;
-  z-index: 100;
-}
-
-.modern-settings-btn:hover {
-  transform: scale(1.1) rotate(90deg);
-}
+/* Settings Button - Removed (now in hamburger menu) */
 
 /* Empty States */
 .modern-empty {

@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useAppStore } from '../stores/appStore';
-import TranscriptPanel from './TranscriptPanel';
+import TranscriptPanelOptimized from './TranscriptPanelOptimized';
 import TodoPanel from './TodoPanel';
 import ChatPanel from './ChatPanel';
 import SettingsPanel from './SettingsPanel';
 
 const MainContent: React.FC = () => {
-  const [showSettings, setShowSettings] = useState(false);
+  const showSettings = useAppStore((state) => state.showSettings);
+  const setShowSettings = useAppStore((state) => state.setShowSettings);
   const recording = useAppStore((state) => state.recording);
   const transcripts = useAppStore((state) => state.transcripts);
   const todos = useAppStore((state) => state.todos);
@@ -56,12 +57,12 @@ const MainContent: React.FC = () => {
               )}
             </div>
             <div className="modern-panel-body">
-              <TranscriptPanel />
+              <TranscriptPanelOptimized />
             </div>
           </div>
 
-          {/* Action Items Panel */}
-          <div className="modern-panel">
+          {/* Action Items Panel - Commented out as requested */}
+          {/* <div className="modern-panel">
             <div className="modern-panel-header">
               <h3 style={{ flex: 1 }}>
                 ✅ Todos
@@ -70,7 +71,7 @@ const MainContent: React.FC = () => {
             <div className="modern-panel-body">
               <TodoPanel />
             </div>
-          </div>
+          </div> */}
 
           {/* AI Assistant Panel */}
           <div className="modern-panel">
@@ -91,14 +92,6 @@ const MainContent: React.FC = () => {
           </div>
         </div>
 
-        {/* Floating Settings Button */}
-        <button 
-          className="modern-settings-btn"
-          onClick={() => setShowSettings(true)}
-          title="Settings"
-        >
-          ⚙️
-        </button>
       </div>
 
       {/* Modern Footer */}

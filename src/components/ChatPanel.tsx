@@ -154,10 +154,30 @@ const ChatPanel: React.FC = () => {
       <div style={{ padding: '16px', borderBottom: '1px solid #333' }}>
         <div style={{ 
           display: 'flex', 
-          justifyContent: 'flex-end', 
-          alignItems: 'center',
-          marginBottom: '12px'
+          justifyContent: 'space-between', 
+          alignItems: 'center'
         }}>
+          {/* Summarize button */}
+          <button
+            onClick={() => handleQuickAction('summarize')}
+            disabled={isLoading}
+            style={{
+              padding: '6px 12px',
+              fontSize: '11px',
+              background: '#444',
+              border: 'none',
+              borderRadius: '4px',
+              color: '#ccc',
+              cursor: isLoading ? 'not-allowed' : 'pointer',
+              opacity: isLoading ? 0.6 : 1,
+              transition: 'background 0.2s'
+            }}
+            onMouseEnter={(e) => !isLoading && (e.currentTarget.style.background = '#555')}
+            onMouseLeave={(e) => e.currentTarget.style.background = '#444'}
+          >
+            📄 Summarize
+          </button>
+
           {/* Auto AI Suggestions Toggle */}
           <label style={{ 
             display: 'flex', 
@@ -178,39 +198,6 @@ const ChatPanel: React.FC = () => {
             />
             Auto AI
           </label>
-        </div>
-
-        {/* Quick actions */}
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(2, 1fr)', 
-          gap: '6px',
-          marginBottom: '12px'
-        }}>
-          {[
-            { key: 'summarize', label: '📄 Summarize', action: 'summarize' },
-            { key: 'todos', label: '✅ Find Todos', action: 'todos' },
-            { key: 'insights', label: '💡 Insights', action: 'insights' },
-            { key: 'sentiment', label: '😊 Sentiment', action: 'sentiment' }
-          ].map((item) => (
-            <button
-              key={item.key}
-              onClick={() => handleQuickAction(item.action)}
-              disabled={isLoading}
-              style={{
-                padding: '6px 8px',
-                fontSize: '11px',
-                background: '#444',
-                border: 'none',
-                borderRadius: '4px',
-                color: '#ccc',
-                cursor: isLoading ? 'not-allowed' : 'pointer',
-                opacity: isLoading ? 0.6 : 1
-              }}
-            >
-              {item.label}
-            </button>
-          ))}
         </div>
       </div>
       

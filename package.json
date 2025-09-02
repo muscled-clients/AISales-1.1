@@ -1,7 +1,7 @@
 {
-  "name": "ai-sales-assistant",
+  "name": "muscled-sales-ai-assistant",
   "version": "1.0.0",
-  "description": "AI Sales Assistant - High-performance React + Electron + Zustand",
+  "description": "Muscled Sales AI Assistant - High-performance React + Electron + Zustand",
   "main": "public/electron.js",
   "author": "Muscled Inc",
   "license": "MIT",
@@ -60,8 +60,8 @@
     ]
   },
   "build": {
-    "appId": "com.smartcallmate.app",
-    "productName": "SmartCallMate",
+    "appId": "com.muscled.salesai",
+    "productName": "Muscled Sales AI Assistant",
     "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
     "directories": {
       "output": "dist"

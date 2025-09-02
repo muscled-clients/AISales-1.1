@@ -3,6 +3,8 @@
  * Enhanced with response type detection, topic analysis, and contextual suggestions
  */
 
+import { resourceManager } from './resourceManager';
+
 interface ChatRequest {
   message: string;
   context?: string;
@@ -60,6 +62,10 @@ export class AIService {
   private baseUrl = 'https://api.openai.com/v1';
   private model = 'gpt-3.5-turbo';
   private isInitialized = false;
+  
+  // Request management
+  private readonly REQUEST_TIMEOUT = 30000; // 30 seconds
+  private currentRequests = new Map<string, AbortController>();
   
   // Advanced rate limiting
   private lastSuggestionTime = 0;
@@ -248,12 +254,22 @@ export class AIService {
   }
 
   /**
-   * Send chat message to AI
+   * Send chat message to AI with timeout and cancellation support
    */
   async sendChatMessage(request: ChatRequest): Promise<ChatResponse> {
     if (!this.isReady()) {
       throw new Error('AI service not initialized');
     }
+
+    const requestId = `chat-${Date.now()}`;
+    const controller = resourceManager.createAbortController(requestId);
+    
+    // Set up auto-timeout
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+      this.currentRequests.delete(requestId);
+      console.log(`⏱️ Request ${requestId} timed out after ${this.REQUEST_TIMEOUT}ms`);
+    }, this.REQUEST_TIMEOUT);
 
     try {
       console.log('💬 Sending chat message to OpenAI...');
@@ -286,14 +302,20 @@ export class AIService {
           max_tokens: 500,
           temperature: 0.7,
           stream: false
-        })
+        }),
+        signal: controller.signal // Add abort signal
       });
 
       if (!response.ok) {
         throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
       }
 
-      const data = await response.json();
+      // Parse response progressively for large responses
+      const text = await response.text();
+      const data = text.length > 10000 
+        ? await this.parseResponseProgressive(text)
+        : JSON.parse(text);
+      
       const content = data.choices?.[0]?.message?.content || 'No response generated';
 
       console.log('✅ OpenAI response received');
@@ -302,10 +324,45 @@ export class AIService {
         content,
         timestamp: new Date()
       };
-    } catch (error) {
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        console.error('⏱️ Request timed out');
+        throw new Error('Request timeout - please try again');
+      }
       console.error('❌ OpenAI chat failed:', error);
       throw error;
+    } finally {
+      clearTimeout(timeoutId);
+      this.currentRequests.delete(requestId);
+      resourceManager.cancelRequest(requestId);
     }
+  }
+
+  /**
+   * Parse large JSON responses progressively to avoid blocking
+   */
+  private async parseResponseProgressive(text: string): Promise<any> {
+    return new Promise((resolve, reject) => {
+      setTimeout(() => {
+        try {
+          resolve(JSON.parse(text));
+        } catch (error) {
+          reject(error);
+        }
+      }, 0);
+    });
+  }
+
+  /**
+   * Cancel all pending AI requests
+   */
+  cancelAllRequests(): void {
+    console.log('❌ Cancelling all AI requests');
+    this.currentRequests.forEach((controller, id) => {
+      controller.abort();
+      resourceManager.cancelRequest(id);
+    });
+    this.currentRequests.clear();
   }
 
   /**

@@ -5,6 +5,7 @@ const SettingsPanel: React.FC = () => {
   // Zustand performance: subscribe only to settings
   const settings = useAppStore((state) => state.settings);
   const updateSettings = useAppStore((state) => state.updateSettings);
+  const setShowSettings = useAppStore((state) => state.setShowSettings);
   
   const [localSettings, setLocalSettings] = useState(settings);
   const [hasChanges, setHasChanges] = useState(false);
@@ -17,6 +18,21 @@ const SettingsPanel: React.FC = () => {
   useEffect(() => {
     setLocalSettings(settings);
   }, [settings]);
+
+  // Handle Escape key to close settings
+  useEffect(() => {
+    const handleEscapeKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShowSettings(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleEscapeKey);
+
+    return () => {
+      document.removeEventListener('keydown', handleEscapeKey);
+    };
+  }, [setShowSettings]);
 
   const handleSettingChange = (key: keyof typeof settings, value: string | boolean) => {
     const newSettings = { ...localSettings, [key]: value };

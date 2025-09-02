@@ -63,18 +63,20 @@ const MainApp: React.FC = () => {
     }
 
     // Listen for overlay sync requests
-    if ((window.electronAPI as any).onSyncToOverlayRequested) {
+    if (window.electronAPI && (window.electronAPI as any).onSyncToOverlayRequested) {
       (window.electronAPI as any).onSyncToOverlayRequested(() => {
         console.log('⚡ Immediate sync to overlay requested');
         // Get current state and sync immediately
         const state = useAppStore.getState();
-        (window.electronAPI as any).syncToOverlay({
-          action: 'syncState',
-          chatHistory: state.chatHistory,
-          transcripts: state.transcripts,
-          recording: state.recording,
-          selectedContext: state.selectedContext
-        });
+        if (window.electronAPI && (window.electronAPI as any).syncToOverlay) {
+          (window.electronAPI as any).syncToOverlay({
+            action: 'syncState',
+            chatHistory: state.chatHistory,
+            transcripts: state.transcripts,
+            recording: state.recording,
+            selectedContext: state.selectedContext
+          });
+        }
       });
     }
 

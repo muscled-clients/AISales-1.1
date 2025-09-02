@@ -1,6 +1,6 @@
-# SmartCallMate - AI-Powered Sales Assistant
+# Muscled Sales AI Assistant - AI-Powered Sales Assistant
 
-SmartCallMate is a cross-platform desktop application that provides real-time AI assistance during sales calls and meetings. Built with React, Electron, and TypeScript, it offers live transcription, AI insights, and intelligent todo generation.
+Muscled Sales AI Assistant is a cross-platform desktop application that provides real-time AI assistance during sales calls and meetings. Built with React, Electron, and TypeScript, it offers live transcription, AI insights, and intelligent todo generation.
 
 ## ✨ Features
 
@@ -31,7 +31,7 @@ SmartCallMate is a cross-platform desktop application that provides real-time AI
 ```bash
 # Clone the repository
 git clone <repository-url>
-cd SmartCallMate-React
+cd Muscled Sales AI Assistant-React
 
 # Install dependencies
 npm install
@@ -74,7 +74,7 @@ For detailed setup instructions, see [SETUP.md](SETUP.md).
 
 ### Project Structure
 ```
-SmartCallMate-React/
+Muscled Sales AI Assistant-React/
 ├── src/
 │   ├── components/         # React components
 │   ├── stores/            # Zustand state management
@@ -203,4 +203,4 @@ This project is licensed under the MIT License. See [LICENSE](LICENSE) for detai
 
 **Made with ❤️ for better sales conversations**
 
-*SmartCallMate helps sales professionals have more effective conversations by providing real-time AI assistance and automatic documentation.*
+*Muscled Sales AI Assistant helps sales professionals have more effective conversations by providing real-time AI assistance and automatic documentation.*

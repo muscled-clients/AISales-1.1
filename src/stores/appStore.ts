@@ -8,6 +8,7 @@ import { electronTranscriptionService } from '../services/electronTranscriptionS
 import { aiService } from '../services/aiService';
 import { improvedAIProcessor } from './improvedAIProcessor';
 import { transcriptDeduplicator } from '../utils/transcriptDeduplicator';
+import { transcriptDeduplicator as efficientDeduplicator } from '../utils/transcriptDeduplication';
 
 interface AppState {
   // Recording
@@ -28,8 +29,10 @@ interface AppState {
   
   // UI State (removed activePanel - showing all panels simultaneously)
   selectedContext: string[];
+  showSettings: boolean;
   
   // Actions
+  setShowSettings: (show: boolean) => void;
   setRecording: (recording: RecordingState) => void;
   startRecording: () => Promise<boolean>;
   stopRecording: () => Promise<void>;
@@ -66,6 +69,7 @@ export const useAppStore = create<AppState>()(
     lastAIProcessingTime: 0,
     pendingAITimeout: null,
     selectedContext: [],
+    showSettings: false,
     settings: {
       deepgramKey: '',
       openaiKey: '',
@@ -78,6 +82,10 @@ export const useAppStore = create<AppState>()(
     // No activePanel needed anymore
     
     // Actions
+    setShowSettings: (show) => set((state) => {
+      state.showSettings = show;
+    }),
+    
     setRecording: (recording) => set((state) => {
       state.recording = recording;
     }),
@@ -391,49 +399,27 @@ export const useAppStore = create<AppState>()(
         return;
       }
       
+      // OPTIMIZATION: Use O(1) hash-based deduplication instead of O(n²) similarity
+      if (efficientDeduplicator.isDuplicate(transcript.text)) {
+        console.log('🚫 Skipping duplicate transcript (hash match)');
+        return;
+      }
+      
       const newTranscript: Transcript = {
         ...transcript,
         id: `transcript_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
       };
       
-      // If this is a final transcript, handle merging logic
-      if (!transcript.isInterim && state.transcripts.length > 0) {
-        const lastTranscripts = state.transcripts.slice(-3); // Check last 3 transcripts
-        
-        // Find if we should replace or merge with previous transcripts
-        for (let i = lastTranscripts.length - 1; i >= 0; i--) {
-          const existingTranscript = lastTranscripts[i];
-          const existingIndex = state.transcripts.indexOf(existingTranscript);
-          
-          // If this final text contains a previous transcript, replace it
-          if (transcript.text.includes(existingTranscript.text) && 
-              transcript.text.length > existingTranscript.text.length) {
-            console.log(`🔄 Replacing transcript "${existingTranscript.text}" with final version`);
-            state.transcripts[existingIndex] = newTranscript;
-            return;
-          }
-          
-          // If previous transcript is very similar (>90% similarity), skip duplicate
-          const { calculateSimilarity } = useAppStore.getState();
-          if (calculateSimilarity(transcript.text, existingTranscript.text) > 0.9) {
-            return;
-          }
-        }
-      }
-      
-      // Check for exact duplicates in recent transcripts
-      const recentTranscripts = state.transcripts.slice(-5);
-      const isDuplicate = recentTranscripts.some(existing => 
-        existing.text === transcript.text
-      );
-      
-      if (isDuplicate) {
-        console.log('🚫 Skipping exact duplicate transcript:', transcript.text);
-        return;
-      }
-      
+      // Add to transcripts
       state.transcripts.push(newTranscript);
       console.log('➕ Added new transcript:', transcript.text.substring(0, 50));
+      
+      // OPTIMIZATION: Implement memory bounds to prevent infinite growth
+      if (state.transcripts.length > 500) {
+        // Keep only the most recent 250 transcripts
+        state.transcripts = state.transcripts.slice(-250);
+        console.log('🧹 Cleaned old transcripts, kept last 250');
+      }
       
       // Sync to overlay immediately after state update
       if (window.electronAPI && (window.electronAPI as any).syncToOverlay) {

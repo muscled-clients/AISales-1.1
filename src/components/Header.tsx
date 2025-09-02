@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAppStore } from '../stores/appStore';
 
 const Header: React.FC = () => {
-  const { recording, startRecording, stopRecording } = useAppStore();
+  const { recording, startRecording, stopRecording, setShowSettings } = useAppStore();
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showMenu, setShowMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const handleRecordingToggle = async () => {
     if (isProcessing) return;
@@ -48,6 +50,31 @@ const Header: React.FC = () => {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // Handle menu item click
+  const handleMenuItemClick = (action: string) => {
+    if (action === 'settings') {
+      setShowSettings(true);
+    }
+    setShowMenu(false);
+  };
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+
+    if (showMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showMenu]);
+
   // Update duration every second when recording
   React.useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -71,52 +98,90 @@ const Header: React.FC = () => {
     : recording.duration;
 
   return (
-    <div className="modern-header" style={{ position: 'relative' }}>
-      <h1 className="modern-logo">🎙️ AI Sales Assistant</h1>
+    <div className="modern-header" style={{ 
+      position: 'relative',
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingLeft: '16px',
+      zIndex: 1000
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        {/* Hamburger Menu */}
+        <div ref={menuRef} style={{ position: 'relative' }}>
+          <button
+            onClick={() => setShowMenu(!showMenu)}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: '#e0e0e0',
+              fontSize: '24px',
+              cursor: 'pointer',
+              padding: '4px 8px',
+              borderRadius: '4px',
+              transition: 'background 0.2s',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'}
+            onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+            title="Menu"
+          >
+            ☰
+          </button>
+          
+          {/* Dropdown Menu */}
+          {showMenu && (
+            <div style={{
+              position: 'fixed',
+              top: '60px',
+              left: '16px',
+              background: 'rgba(30, 41, 59, 0.98)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              borderRadius: '8px',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)',
+              minWidth: '180px',
+              zIndex: 99999,
+              overflow: 'hidden'
+            }}>
+              <button
+                onClick={() => handleMenuItemClick('settings')}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#e0e0e0',
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  transition: 'background 0.2s'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+              >
+                ⚙️ Settings
+              </button>
+            </div>
+          )}
+        </div>
+
+        <h1 style={{ 
+          fontSize: '18px',
+          margin: 0,
+          padding: 0,
+          textAlign: 'left',
+          flex: '0 0 auto',
+          color: '#ffffff',
+          fontWeight: 700
+        }}>Muscled Sales AI Assistant</h1>
+      </div>
       
       <div className="header-controls" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-
-        <button
-          onClick={() => {
-            console.log('Overlay button clicked');
-            if (window.electronAPI) {
-              console.log('Opening overlay...');
-              window.electronAPI.openOverlay();
-            } else {
-              console.error('Electron API not available');
-            }
-          }}
-          className="overlay-mode-btn"
-          title="Switch to Overlay Mode"
-          style={{
-            padding: '8px 16px',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            border: '1px solid #667eea',
-            borderRadius: '6px',
-            color: 'white',
-            cursor: 'pointer',
-            fontSize: '13px',
-            fontWeight: '600',
-            marginRight: '12px',
-            transition: 'all 0.2s ease',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '6px',
-            height: '36px',
-            boxShadow: '0 2px 4px rgba(102, 126, 234, 0.2)'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'translateY(-1px)';
-            e.currentTarget.style.boxShadow = '0 4px 8px rgba(102, 126, 234, 0.3)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'translateY(0)';
-            e.currentTarget.style.boxShadow = '0 2px 4px rgba(102, 126, 234, 0.2)';
-          }}
-        >
-          ⬜ Overlay
-        </button>
         
         {error && (
           <span style={{ 
@@ -155,9 +220,9 @@ const Header: React.FC = () => {
           {isProcessing ? (
             <>⏳ {recording.isRecording ? 'Stopping...' : 'Starting...'}</>
           ) : recording.isRecording ? (
-            <>⏹️ Stop Recording</>
+            <>⏹️ Stop Sales AI</>
           ) : (
-            <>🎤 Start Recording</>
+            <>🎤 Activate Sales AI</>
           )}
         </button>
       </div>

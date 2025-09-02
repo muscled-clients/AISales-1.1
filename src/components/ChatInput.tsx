@@ -18,9 +18,9 @@ const ChatInput: React.FC<ChatInputProps> = memo(({
   onUpdateContext
 }) => {
   const [message, setMessage] = useState('');
-  const [editingContext, setEditingContext] = useState(false);
   const [contextText, setContextText] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const contextRef = useRef<HTMLTextAreaElement>(null);
 
   const handleSendMessage = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,153 +29,120 @@ const ChatInput: React.FC<ChatInputProps> = memo(({
     const userMessage = message.trim();
     setMessage('');
     
-    if (inputRef.current) {
-      inputRef.current.focus();
-    }
+    // Keep focus on input throughout the process
+    const keepFocus = () => {
+      if (inputRef.current && document.activeElement !== inputRef.current) {
+        inputRef.current.focus();
+      }
+    };
+    
+    // Focus immediately
+    keepFocus();
 
-    await onSendMessage(userMessage);
+    // Start the async operation
+    const sendPromise = onSendMessage(userMessage);
+    
+    // Keep checking focus during send
+    const focusInterval = setInterval(keepFocus, 50);
+    
+    // Wait for send to complete
+    await sendPromise;
+    
+    // Clear interval and do final focus
+    clearInterval(focusInterval);
+    keepFocus();
   }, [message, isLoading, onSendMessage]);
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setMessage(e.target.value);
   }, []);
 
-  const startEditingContext = useCallback(() => {
+  React.useEffect(() => {
     setContextText(selectedContext.join('\n'));
-    setEditingContext(true);
   }, [selectedContext]);
 
-  const saveEditedContext = useCallback(() => {
+  // Auto-focus input when loading completes
+  React.useEffect(() => {
+    if (!isLoading && inputRef.current) {
+      // Small delay to ensure DOM updates are complete
+      setTimeout(() => {
+        if (inputRef.current && document.activeElement !== inputRef.current) {
+          inputRef.current.focus();
+        }
+      }, 50);
+    }
+  }, [isLoading]);
+
+  // Focus on mount
+  React.useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, []);
+
+  const handleContextChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newText = e.target.value;
+    setContextText(newText);
     if (onUpdateContext) {
-      const newContext = contextText.split('\n').filter(line => line.trim());
+      const newContext = newText.split('\n').filter(line => line.trim());
       onUpdateContext(newContext);
     }
-    setEditingContext(false);
-  }, [contextText, onUpdateContext]);
-
-  const cancelEditingContext = useCallback(() => {
-    setEditingContext(false);
-    setContextText('');
-  }, []);
+  }, [onUpdateContext]);
 
   return (
     <div style={{ padding: '16px', borderTop: '1px solid #333' }}>
       {selectedContext.length > 0 && (
         <div style={{
-          background: '#2a3f5f',
-          padding: '12px',
-          borderRadius: '8px',
-          marginBottom: '12px',
-          border: '1px solid #3a4f6f'
+          position: 'relative',
+          marginBottom: '12px'
         }}>
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '8px'
-          }}>
-            <span style={{ fontSize: '12px', color: '#007acc', fontWeight: 'bold' }}>
-              Selected Context ({selectedContext.length} items)
-            </span>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              {!editingContext ? (
-                <>
-                  <button
-                    onClick={startEditingContext}
-                    style={{
-                      padding: '4px 8px',
-                      fontSize: '11px',
-                      background: 'transparent',
-                      border: '1px solid #007acc',
-                      borderRadius: '4px',
-                      color: '#007acc',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={onClearContext}
-                    style={{
-                      padding: '4px 8px',
-                      fontSize: '11px',
-                      background: 'transparent',
-                      border: '1px solid #666',
-                      borderRadius: '4px',
-                      color: '#666',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Clear
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    onClick={saveEditedContext}
-                    style={{
-                      padding: '4px 8px',
-                      fontSize: '11px',
-                      background: '#007acc',
-                      border: 'none',
-                      borderRadius: '4px',
-                      color: '#fff',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Save
-                  </button>
-                  <button
-                    onClick={cancelEditingContext}
-                    style={{
-                      padding: '4px 8px',
-                      fontSize: '11px',
-                      background: 'transparent',
-                      border: '1px solid #666',
-                      borderRadius: '4px',
-                      color: '#666',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Cancel
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-          {!editingContext ? (
-            <div style={{
-              fontSize: '13px',
+          <button
+            onClick={onClearContext}
+            style={{
+              position: 'absolute',
+              top: '8px',
+              right: '8px',
+              padding: '2px',
+              background: 'transparent',
+              border: 'none',
+              color: '#666',
+              cursor: 'pointer',
+              fontSize: '16px',
+              lineHeight: '1',
+              fontWeight: 'bold',
+              zIndex: 10,
+              transition: 'color 0.2s'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.color = '#ff4444'}
+            onMouseLeave={(e) => e.currentTarget.style.color = '#666'}
+            title="Clear context"
+          >
+            ×
+          </button>
+          <textarea
+            ref={contextRef}
+            value={contextText}
+            onChange={handleContextChange}
+            style={{
+              width: '100%',
+              minHeight: '60px',
+              maxHeight: '120px',
+              padding: '8px 24px 8px 8px',
+              background: '#1e1e1e',
+              border: '1px solid #333',
+              borderRadius: '6px',
               color: '#e0e0e0',
-              maxHeight: '100px',
-              overflowY: 'auto',
-              lineHeight: '1.5'
-            }}>
-              {selectedContext.map((text, index) => (
-                <div key={index} style={{ marginBottom: '4px' }}>
-                  • {text}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <textarea
-              value={contextText}
-              onChange={(e) => setContextText(e.target.value)}
-              style={{
-                width: '100%',
-                minHeight: '80px',
-                padding: '8px',
-                background: '#1e1e1e',
-                border: '1px solid #444',
-                borderRadius: '4px',
-                color: '#fff',
-                fontSize: '13px',
-                resize: 'vertical',
-                outline: 'none'
-              }}
-              placeholder="Edit context..."
-            />
-          )}
+              fontSize: '13px',
+              lineHeight: '1.4',
+              resize: 'none',
+              outline: 'none',
+              fontFamily: 'inherit',
+              transition: 'border-color 0.2s'
+            }}
+            placeholder="Selected context..."
+            onFocus={(e) => e.target.style.borderColor = '#444'}
+            onBlur={(e) => e.target.style.borderColor = '#333'}
+          />
         </div>
       )}
       
