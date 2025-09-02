@@ -6,8 +6,9 @@ const TranscriptPanel: React.FC = () => {
   const transcripts = useAppStore((state) => state.transcripts);
   const recording = useAppStore((state) => state.recording);
   const selectedContext = useAppStore((state) => state.selectedContext);
-  const setSelectedContext = useAppStore((state) => state.setSelectedContext);
-  const clearSelectedContext = useAppStore((state) => state.clearSelectedContext);
+  const setSelectedContextFromTranscript = useAppStore((state) => state.setSelectedContextFromTranscript);
+  const sendTranscriptAsMessage = useAppStore((state) => state.sendTranscriptAsMessage);
+  const clearSelectedContextFromTranscript = useAppStore((state) => state.clearSelectedContextFromTranscript);
   
   // Ref for scrollable container
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -36,8 +37,8 @@ const TranscriptPanel: React.FC = () => {
   const handleDoubleClick = useCallback((text: string) => {
     setSelectedTexts([text]);
     setSelectionMode('custom');
-    setSelectedContext([text]);
-  }, [setSelectedContext]);
+    setSelectedContextFromTranscript([text]);
+  }, [setSelectedContextFromTranscript]);
 
   const handleCtrlClick = useCallback((e: React.MouseEvent, text: string) => {
     e.preventDefault();
@@ -47,11 +48,11 @@ const TranscriptPanel: React.FC = () => {
           ? prev.filter(t => t !== text)
           : [...prev, text];
         setSelectionMode('multi');
-        setSelectedContext(newSelection);
+        setSelectedContextFromTranscript(newSelection);
         return newSelection;
       });
     }
-  }, [setSelectedContext]);
+  }, [setSelectedContextFromTranscript]);
 
   const handleTextSelection = useCallback((text: string) => {
     const selection = window.getSelection();
@@ -59,16 +60,20 @@ const TranscriptPanel: React.FC = () => {
       const selectedText = selection.toString().trim();
       setSelectedTexts([selectedText]);
       setSelectionMode('custom');
-      setSelectedContext([selectedText]);
+      setSelectedContextFromTranscript([selectedText]);
     }
-  }, [setSelectedContext]);
+  }, [setSelectedContextFromTranscript]);
 
 
   const clearSelection = useCallback(() => {
     setSelectedTexts([]);
     setSelectionMode('none');
-    clearSelectedContext();
-  }, [clearSelectedContext]);
+    clearSelectedContextFromTranscript();
+  }, [clearSelectedContextFromTranscript]);
+  
+  const handleSendToChat = useCallback(async (text: string) => {
+    await sendTranscriptAsMessage(text);
+  }, [sendTranscriptAsMessage]);
   
   // Auto-scroll to bottom when new transcripts arrive
   useEffect(() => {
@@ -89,45 +94,80 @@ const TranscriptPanel: React.FC = () => {
   }, []);
 
   // Memoized transcript item component for better performance
-  const TranscriptItem = memo(({ transcript }: { transcript: any }) => (
-    <div className="transcript-item">
+  const TranscriptItem = memo(({ transcript }: { transcript: any }) => {
+    const [hovering, setHovering] = useState(false);
+    
+    return (
       <div 
-        className="transcript-text" 
-        style={{
-          padding: '12px',
-          background: selectedTexts.includes(transcript.text) ? '#2a4a6b' : '#2a2a2a',
-          border: selectedTexts.includes(transcript.text) ? '1px solid #007acc' : '1px solid #333',
-          borderRadius: '8px',
-          marginBottom: '8px',
-          lineHeight: '1.5',
-          fontSize: '14px',
-          cursor: 'pointer',
-          userSelect: 'text',
-          transition: 'all 0.2s ease',
-          willChange: 'background, border'
-        }}
-        onDoubleClick={() => handleDoubleClick(transcript.text)}
-        onClick={(e) => handleCtrlClick(e, transcript.text)}
-        onMouseUp={() => handleTextSelection(transcript.text)}
-        onTouchEnd={() => handleTextSelection(transcript.text)}
+        className="transcript-item"
+        onMouseEnter={() => setHovering(true)}
+        onMouseLeave={() => setHovering(false)}
       >
-        <div style={{ fontSize: '14px', color: '#e0e0e0' }}>
-          {transcript.text}
-        </div>
-        <div style={{ 
-          fontSize: '11px', 
-          color: '#888',
-          marginTop: '4px',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center'
-        }}>
-          <span>{transcript.speaker || 'Speaker'}</span>
-          <span>{formatTime(transcript.timestamp)}</span>
+        <div 
+          className="transcript-text" 
+          style={{
+            padding: '12px',
+            background: selectedTexts.includes(transcript.text) ? '#2a4a6b' : '#2a2a2a',
+            border: selectedTexts.includes(transcript.text) ? '1px solid #007acc' : '1px solid #333',
+            borderRadius: '8px',
+            marginBottom: '8px',
+            lineHeight: '1.5',
+            fontSize: '14px',
+            cursor: 'pointer',
+            userSelect: 'text',
+            transition: 'all 0.2s ease',
+            willChange: 'background, border',
+            position: 'relative'
+          }}
+          onDoubleClick={() => handleDoubleClick(transcript.text)}
+          onClick={(e) => handleCtrlClick(e, transcript.text)}
+          onMouseUp={() => handleTextSelection(transcript.text)}
+          onTouchEnd={() => handleTextSelection(transcript.text)}
+        >
+          <div style={{ fontSize: '14px', color: '#e0e0e0' }}>
+            {transcript.text}
+          </div>
+          <div style={{ 
+            fontSize: '11px', 
+            color: '#888',
+            marginTop: '4px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
+          }}>
+            <span>{transcript.speaker || 'Speaker'}</span>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              {hovering && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleSendToChat(transcript.text);
+                  }}
+                  style={{
+                    padding: '2px 6px',
+                    fontSize: '10px',
+                    background: '#007acc',
+                    border: 'none',
+                    borderRadius: '3px',
+                    color: '#fff',
+                    cursor: 'pointer',
+                    opacity: 0.8,
+                    transition: 'opacity 0.2s'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                  onMouseLeave={(e) => e.currentTarget.style.opacity = '0.8'}
+                  title="Send to chat"
+                >
+                  💬 Send
+                </button>
+              )}
+              <span>{formatTime(transcript.timestamp)}</span>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
-  ));
+    );
+  });
 
   return (
     <div className="panel" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>

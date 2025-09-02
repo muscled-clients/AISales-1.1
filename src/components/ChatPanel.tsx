@@ -1,33 +1,26 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useAppStore } from '../stores/appStore';
 import { aiService } from '../services/aiService';
+import ChatInput from './ChatInput';
 
 const ChatPanel: React.FC = () => {
-  // Refs for scroll and input
+  // Refs for scroll 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  
   // Zustand performance optimization: subscribe only to needed state slices
+  // REMOVED transcript subscription to prevent re-renders
   const chatHistory = useAppStore((state) => state.chatHistory);
   const sendChatMessage = useAppStore((state) => state.sendChatMessage);
+  const sendTranscriptAsMessage = useAppStore((state) => state.sendTranscriptAsMessage);
   const settings = useAppStore((state) => state.settings);
   const updateSettings = useAppStore((state) => state.updateSettings);
-  const transcripts = useAppStore((state) => state.transcripts);
   const selectedContext = useAppStore((state) => state.selectedContext);
+  const setSelectedContext = useAppStore((state) => state.setSelectedContext);
   const clearSelectedContext = useAppStore((state) => state.clearSelectedContext);
   
-  const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [aiStatus, setAiStatus] = useState('');
   const [userHasScrolled, setUserHasScrolled] = useState(false);
-  
-  // Track transcript count for debugging
-  React.useEffect(() => {
-    if (transcripts.length > 0) {
-      const lastTranscript = transcripts[transcripts.length - 1];
-      setAiStatus(`📝 Last: "${lastTranscript.text.substring(0, 30)}..."`);
-      setTimeout(() => setAiStatus(''), 2000);
-    }
-  }, [transcripts]);
 
   // Debug chat history changes
   React.useEffect(() => {
@@ -38,28 +31,29 @@ const ChatPanel: React.FC = () => {
     }
   }, [chatHistory]);
 
-  const handleSendMessage = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!message.trim() || isLoading) return;
-
-    const userMessage = message.trim();
-    setMessage('');
+  // Memoized send message handler
+  const handleSendMessage = useCallback(async (message: string) => {
     setIsLoading(true);
-    
-    // Keep focus on input for smooth typing
-    if (inputRef.current) {
-      inputRef.current.focus();
-    }
-
     try {
-      // Use the Zustand store action which handles AI integration
-      await sendChatMessage(userMessage);
+      await sendChatMessage(message);
     } catch (error) {
       console.error('Chat error:', error);
     } finally {
       setIsLoading(false);
     }
-  }, [message, isLoading, sendChatMessage]);
+  }, [sendChatMessage]);
+  
+  // Memoized send transcript message handler
+  const handleSendTranscriptMessage = useCallback(async (text: string) => {
+    setIsLoading(true);
+    try {
+      await sendTranscriptAsMessage(text);
+    } catch (error) {
+      console.error('Transcript message error:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [sendTranscriptAsMessage]);
   
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -80,15 +74,11 @@ const ChatPanel: React.FC = () => {
     const isAtBottom = Math.abs(container.scrollHeight - container.scrollTop - container.clientHeight) < 50;
     setUserHasScrolled(!isAtBottom);
   }, []);
-  
-  // Optimize input change handler
-  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setMessage(e.target.value);
-  }, []);
 
   const handleQuickAction = async (action: string) => {
     if (action === 'debug') {
       // Debug AI settings and status
+      const { transcripts } = useAppStore.getState();
       const debugInfo = {
         aiReady: aiService.isReady(),
         settings: settings,
@@ -128,19 +118,16 @@ const ChatPanel: React.FC = () => {
         console.log('Manual trigger result:', result);
         
         if (result.success) {
-          setMessage(`✅ ${result.message}`);
           setAiStatus('✅ AI suggestions working!');
         } else {
-          setMessage(`❌ Failed: ${result.message}`);
           setAiStatus(`❌ AI failed: ${result.message}`);
         }
       } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        setMessage(`❌ Error: ${errorMessage}`);
         setAiStatus(`❌ Error: ${errorMessage}`);
       } finally {
         setIsLoading(false);
-        setTimeout(() => setAiStatus(''), 3000); // Clear status after 3s
+        setTimeout(() => setAiStatus(''), 3000);
       }
       return;
     }
@@ -152,7 +139,10 @@ const ChatPanel: React.FC = () => {
       sentiment: "Analyze the sentiment and tone of my recent conversations."
     };
     
-    setMessage(quickMessages[action as keyof typeof quickMessages] || action);
+    const message = quickMessages[action as keyof typeof quickMessages] || action;
+    if (message) {
+      await handleSendMessage(message);
+    }
   };
 
   const formatTime = (date: Date): string => {
@@ -267,6 +257,15 @@ const ChatPanel: React.FC = () => {
                 }}
               >
                 <div>{msg.content}</div>
+                {msg.timestamp && (
+                  <div style={{ 
+                    fontSize: '10px', 
+                    color: 'rgba(255,255,255,0.5)', 
+                    marginTop: '4px' 
+                  }}>
+                    {formatTime(msg.timestamp)}
+                  </div>
+                )}
               </div>
             ))}
             
@@ -287,97 +286,15 @@ const ChatPanel: React.FC = () => {
         )}
       </div>
       
-      {/* Message input */}
-      <div style={{ 
-        padding: '16px', 
-        borderTop: '1px solid #333',
-        background: 'rgba(35, 35, 35, 0.95)',
-        flexShrink: 0,
-        marginTop: 'auto'
-      }}>
-        {/* Context indicator */}
-        {selectedContext.length > 0 && (
-          <div style={{
-            marginBottom: '12px',
-            padding: '8px 12px',
-            background: 'rgba(0, 122, 204, 0.1)',
-            border: '1px solid rgba(0, 122, 204, 0.3)',
-            borderRadius: '8px',
-            fontSize: '12px',
-            color: '#007acc',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '8px'
-          }}>
-            <div>
-              <span style={{ fontWeight: '500' }}>📎 Selected context:</span>{' '}
-              <span style={{ opacity: 0.8 }}>
-                "{selectedContext.join(' ').substring(0, 60)}..."
-              </span>
-            </div>
-            <button
-              onClick={clearSelectedContext}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: '#007acc',
-                cursor: 'pointer',
-                fontSize: '16px',
-                padding: '2px'
-              }}
-              title="Clear context"
-            >
-              ✕
-            </button>
-          </div>
-        )}
-        
-        <form onSubmit={handleSendMessage} style={{ display: 'flex', gap: '8px' }}>
-          <input
-            ref={inputRef}
-            type="text"
-            value={message}
-            onChange={handleInputChange}
-            placeholder={selectedContext.length > 0 
-              ? "Ask about the selected context..." 
-              : "Ask about your transcripts..."}
-            disabled={isLoading}
-            autoComplete="off"
-            spellCheck={false}
-            style={{
-              flex: 1,
-              padding: '10px 14px',
-              background: '#333',
-              border: '1px solid #555',
-              borderRadius: '20px',
-              color: '#fff',
-              fontSize: '14px',
-              outline: 'none',
-              transition: 'border-color 0.2s ease',
-              willChange: 'transform'
-            }}
-            onFocus={(e) => e.target.style.borderColor = '#007acc'}
-            onBlur={(e) => e.target.style.borderColor = '#555'}
-          />
-          <button
-            type="submit"
-            disabled={!message.trim() || isLoading}
-            style={{
-              padding: '10px 16px',
-              background: message.trim() && !isLoading ? '#007acc' : '#444',
-              border: 'none',
-              borderRadius: '20px',
-              color: '#fff',
-              fontSize: '14px',
-              cursor: message.trim() && !isLoading ? 'pointer' : 'not-allowed',
-              minWidth: '60px'
-            }}
-          >
-            {isLoading ? '⏳' : '➤'}
-          </button>
-        </form>
-      </div>
+      {/* Use the new ChatInput component */}
+      <ChatInput
+        onSendMessage={handleSendMessage}
+        onSendTranscriptMessage={handleSendTranscriptMessage}
+        isLoading={isLoading}
+        selectedContext={selectedContext}
+        onClearContext={clearSelectedContext}
+        onUpdateContext={setSelectedContext}
+      />
     </div>
   );
 };

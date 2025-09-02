@@ -45,6 +45,11 @@ interface AppState {
   calculateSimilarity: (text1: string, text2: string) => number;
   setSelectedContext: (context: string[]) => void;
   clearSelectedContext: () => void;
+  
+  // Event-based actions for transcript-to-chat communication
+  setSelectedContextFromTranscript: (texts: string[]) => void;
+  sendTranscriptAsMessage: (text: string) => Promise<void>;
+  clearSelectedContextFromTranscript: () => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -474,6 +479,82 @@ export const useAppStore = create<AppState>()(
     },
 
     clearSelectedContext: () => {
+      set((state) => {
+        state.selectedContext = [];
+      });
+      
+      // Sync context clear to overlay
+      if (window.electronAPI && (window.electronAPI as any).syncToOverlay) {
+        queueMicrotask(() => {
+          const currentState = useAppStore.getState();
+          (window.electronAPI as any).syncToOverlay({
+            action: 'syncState',
+            selectedContext: currentState.selectedContext,
+            chatHistory: currentState.chatHistory,
+            transcripts: currentState.transcripts,
+            recording: currentState.recording
+          });
+        });
+      }
+    },
+    
+    // Event-based actions for transcript-to-chat communication
+    setSelectedContextFromTranscript: (texts: string[]) => {
+      set((state) => {
+        state.selectedContext = texts;
+      });
+      
+      // Sync context to overlay
+      if (window.electronAPI && (window.electronAPI as any).syncToOverlay) {
+        queueMicrotask(() => {
+          const currentState = useAppStore.getState();
+          (window.electronAPI as any).syncToOverlay({
+            action: 'syncState',
+            selectedContext: currentState.selectedContext,
+            chatHistory: currentState.chatHistory,
+            transcripts: currentState.transcripts,
+            recording: currentState.recording
+          });
+        });
+      }
+    },
+    
+    sendTranscriptAsMessage: async (text: string) => {
+      const { addChatMessage, settings } = useAppStore.getState();
+      
+      // Add transcript as user message
+      addChatMessage({
+        role: 'user',
+        content: text,
+        timestamp: new Date()
+      });
+      
+      // Generate AI response if OpenAI is configured
+      if (settings.openaiKey && aiService.isReady()) {
+        try {
+          const response = await aiService.sendChatMessage({
+            message: text,
+            context: '',
+            conversationHistory: []
+          });
+          
+          addChatMessage({
+            role: 'assistant',
+            content: response.content,
+            timestamp: new Date()
+          });
+        } catch (error) {
+          console.error('❌ AI response error:', error);
+          addChatMessage({
+            role: 'assistant',
+            content: '❌ Failed to generate AI response. Please check your OpenAI configuration.',
+            timestamp: new Date()
+          });
+        }
+      }
+    },
+    
+    clearSelectedContextFromTranscript: () => {
       set((state) => {
         state.selectedContext = [];
       });
