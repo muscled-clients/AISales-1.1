@@ -1,0 +1,381 @@
+.session-history-container {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #1e1e1e 0%, #2d2d2d 100%);
+  padding: 40px 20px;
+  opacity: 1;
+  animation: fadeInPage 0.2s ease-in;
+}
+
+@keyframes fadeInPage {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.session-history-content {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 40px;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.header-title {
+  flex: 1;
+  text-align: center;
+}
+
+.header-title h1 {
+  font-size: 36px;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0 0 8px 0;
+}
+
+.header-title .subtitle {
+  font-size: 16px;
+  color: #a0a0a0;
+  margin: 0;
+}
+
+.back-button,
+.refresh-button {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.back-button:hover,
+.refresh-button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.refresh-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Loading State */
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 20px;
+  gap: 20px;
+}
+
+.spinner {
+  width: 50px;
+  height: 50px;
+  border: 4px solid rgba(255, 255, 255, 0.1);
+  border-top-color: #007acc;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-state p {
+  color: #a0a0a0;
+  font-size: 16px;
+  margin: 0;
+}
+
+/* Error State */
+.error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 20px;
+  gap: 20px;
+  background: rgba(220, 53, 69, 0.1);
+  border: 1px solid rgba(220, 53, 69, 0.3);
+  border-radius: 12px;
+}
+
+.error-state p {
+  color: #dc3545;
+  font-size: 16px;
+  margin: 0;
+}
+
+.error-state button {
+  background: #dc3545;
+  color: #ffffff;
+  border: none;
+  padding: 10px 24px;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.error-state button:hover {
+  background: #c82333;
+  transform: scale(1.02);
+}
+
+/* Empty State */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 20px;
+  gap: 20px;
+}
+
+.empty-icon {
+  font-size: 80px;
+  opacity: 0.5;
+}
+
+.empty-state h3 {
+  font-size: 24px;
+  color: #ffffff;
+  margin: 0;
+}
+
+.empty-state p {
+  color: #a0a0a0;
+  font-size: 16px;
+  margin: 0;
+}
+
+.empty-state button {
+  background: #007acc;
+  color: #ffffff;
+  border: none;
+  padding: 12px 28px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 10px;
+}
+
+.empty-state button:hover {
+  background: #0098ff;
+  transform: scale(1.02);
+}
+
+/* Sessions List - ChatGPT Style */
+.sessions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  margin-top: 20px;
+}
+
+.session-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.group-header {
+  font-size: 14px;
+  font-weight: 600;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0 0 8px 0;
+  padding: 0 12px;
+}
+
+.group-sessions {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.session-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: none;
+  border-radius: 8px;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 60px;
+}
+
+.session-card:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.session-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.session-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.session-title {
+  font-size: 15px;
+  font-weight: 500;
+  color: #ffffff;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.session-title:hover {
+  color: #007acc;
+}
+
+.session-title-input {
+  font-size: 15px;
+  font-weight: 500;
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(0, 122, 204, 0.5);
+  border-radius: 4px;
+  padding: 4px 8px;
+  width: 100%;
+  font-family: inherit;
+}
+
+.session-title-input:focus {
+  outline: none;
+  border-color: #007acc;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.session-preview {
+  font-size: 13px;
+  color: #888;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.session-preview:hover {
+  color: #aaa;
+}
+
+.session-description-input {
+  font-size: 13px;
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(0, 122, 204, 0.5);
+  border-radius: 4px;
+  padding: 4px 8px;
+  width: 100%;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.session-description-input:focus {
+  outline: none;
+  border-color: #007acc;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.session-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: #666;
+}
+
+.session-time {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.session-duration {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.delete-button {
+  background: transparent;
+  border: none;
+  color: #666;
+  padding: 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+}
+
+.session-card:hover .delete-button {
+  opacity: 1;
+}
+
+.delete-button:hover:not(:disabled) {
+  background: rgba(220, 53, 69, 0.2);
+  color: #dc3545;
+}
+
+.delete-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .history-header {
+    flex-direction: column;
+  }
+
+  .header-title {
+    order: -1;
+  }
+
+  .header-title h1 {
+    font-size: 28px;
+  }
+
+  .session-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .session-card {
+    padding: 10px 12px;
+  }
+}

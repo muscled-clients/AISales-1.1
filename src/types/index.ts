@@ -47,3 +47,34 @@ export interface RecordingState {
   startTime?: Date;
   duration: number;
 }
+
+export interface RecordingSession {
+  id: string;
+  title?: string;
+  description?: string;
+  startedAt: Date;
+  endedAt?: Date;
+  duration?: number;
+  transcriptCount: number;
+}
+
+export interface AIConversation {
+  id: string;
+  sessionId: string;
+  userMessage: string;
+  aiResponse: string;
+  contextUsed?: string;
+  selectedTranscript?: string;
+  transcriptStartTime?: number;
+  transcriptEndTime?: number;
+  speakerInfo?: string;
+  modelUsed: string;
+  createdAt: Date;
+}
+
+export interface TranscriptContext {
+  text: string;
+  startTime?: number;
+  endTime?: number;
+  speaker?: string;
+}

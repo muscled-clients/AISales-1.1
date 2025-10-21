@@ -1,11 +1,12 @@
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
-import { Transcript, Todo, ChatMessage, Suggestion, RecordingState, AppSettings } from '../types';
+import { Transcript, Todo, ChatMessage, Suggestion, RecordingState, AppSettings, RecordingSession } from '../types';
 import { nativeAudioCaptureService } from '../services/nativeAudioCapture';
 import { dualAudioCaptureService } from '../services/dualAudioCapture';
 import { electronTranscriptionService } from '../services/electronTranscriptionService';
 // import { systemAudioCapture } from '../services/systemAudioCapture'; // Temporarily disabled
 import { aiService } from '../services/aiService';
+import { groqService } from '../services/groqService';
 import { improvedAIProcessor } from './improvedAIProcessor';
 import { transcriptDeduplicator } from '../utils/transcriptDeduplicator';
 import { transcriptDeduplicator as efficientDeduplicator } from '../utils/transcriptDeduplication';
@@ -14,20 +15,25 @@ import logger from '../utils/logger';
 interface AppState {
   // Recording
   recording: RecordingState;
-  
+
+  // Session Management
+  currentSessionId: string | null;
+  sessions: RecordingSession[];
+  viewingHistoricalSession: boolean;
+
   // Data
   transcripts: Transcript[];
   todos: Todo[];
   chatHistory: ChatMessage[];
   suggestions: Suggestion[];
-  
+
   // Settings
   settings: AppSettings;
-  
+
   // AI Processing State
   lastAIProcessingTime: number;
   pendingAITimeout: NodeJS.Timeout | null;
-  
+
   // UI State (removed activePanel - showing all panels simultaneously)
   selectedContext: string[];
   showSettings: boolean;
@@ -40,6 +46,7 @@ interface AppState {
   startRecording: () => Promise<boolean>;
   stopRecording: () => Promise<void>;
   addTranscript: (transcript: Omit<Transcript, 'id'>) => void;
+  updateTranscript: (id: string, text: string) => void;
   addTodo: (todo: Omit<Todo, 'id' | 'createdAt'>) => void;
   toggleTodo: (id: string) => void;
   addChatMessage: (message: Omit<ChatMessage, 'id'>) => void;
@@ -56,6 +63,17 @@ interface AppState {
   setSelectedContextFromTranscript: (texts: string[]) => void;
   sendTranscriptAsMessage: (text: string) => Promise<void>;
   clearSelectedContextFromTranscript: () => void;
+
+  // Session Management Actions
+  createSession: () => string;
+  endSession: (sessionId: string, transcriptCount: number) => Promise<void>;
+  loadSessionConversations: (sessionId: string) => Promise<void>;
+  loadHistoricalSession: (sessionId: string) => Promise<void>;
+  clearHistoricalSession: () => void;
+  getAllSessions: () => Promise<RecordingSession[]>;
+
+  // Testing function - load fake transcripts
+  loadFakeTranscripts: () => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -65,6 +83,9 @@ export const useAppStore = create<AppState>()(
       isRecording: false,
       duration: 0
     },
+    currentSessionId: null,
+    sessions: [],
+    viewingHistoricalSession: false,
     transcripts: [],
     todos: [],
     chatHistory: [],
@@ -325,6 +346,11 @@ export const useAppStore = create<AppState>()(
         }
         logger.debug('✅ Audio capture and transcription started successfully');
 
+        // Create new session for this recording
+        const { createSession } = useAppStore.getState();
+        const sessionId = createSession();
+        logger.debug('✅ Created new session for recording:', sessionId);
+
         // Update recording state
         set((state) => {
           state.recording = {
@@ -376,6 +402,13 @@ export const useAppStore = create<AppState>()(
       try {
         logger.debug('🛑 Stopping recording session...');
 
+        // End current session
+        const { currentSessionId, transcripts, endSession } = useAppStore.getState();
+        if (currentSessionId) {
+          await endSession(currentSessionId, transcripts.length);
+          logger.debug('✅ Session ended:', currentSessionId);
+        }
+
         // Stop audio capture services
         await nativeAudioCaptureService.stopCapture();
         // systemAudioCapture.stopCapture(); // Disabled
@@ -384,10 +417,10 @@ export const useAppStore = create<AppState>()(
         // Update recording state
         set((state) => {
           const endTime = new Date();
-          const duration = state.recording.startTime 
+          const duration = state.recording.startTime
             ? Math.floor((endTime.getTime() - state.recording.startTime.getTime()) / 1000)
             : 0;
-            
+
           state.recording = {
             isRecording: false,
             duration
@@ -406,21 +439,38 @@ export const useAppStore = create<AppState>()(
       if (transcript.isInterim && transcript.text.length < 3) {
         return;
       }
-      
+
       // OPTIMIZATION: Use O(1) hash-based deduplication instead of O(n²) similarity
       if (efficientDeduplicator.isDuplicate(transcript.text)) {
         logger.debug('🚫 Skipping duplicate transcript (hash match)');
         return;
       }
-      
+
       const newTranscript: Transcript = {
         ...transcript,
         id: `transcript_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
       };
-      
+
       // Add to transcripts
       state.transcripts.push(newTranscript);
       logger.debug('➕ Added new transcript:', transcript.text.substring(0, 50));
+
+      // Save to database if we have a current session and it's not interim
+      const { currentSessionId, viewingHistoricalSession } = useAppStore.getState();
+      if (currentSessionId && !viewingHistoricalSession && !transcript.isInterim) {
+        if (window.electronAPI && (window.electronAPI as any).saveTranscript) {
+          (window.electronAPI as any).saveTranscript({
+            id: newTranscript.id,
+            sessionId: currentSessionId,
+            text: newTranscript.text,
+            timestamp: newTranscript.timestamp,
+            isInterim: newTranscript.isInterim,
+            speaker: newTranscript.speaker || null
+          }).catch((error: any) => {
+            logger.error('❌ Failed to save transcript to DB:', error);
+          });
+        }
+      }
       
       // OPTIMIZATION: Implement memory bounds to prevent infinite growth
       if (state.transcripts.length > 500) {
@@ -568,7 +618,25 @@ export const useAppStore = create<AppState>()(
       }
     },
 
-    
+    updateTranscript: (id, text) => set((state) => {
+      const transcript = state.transcripts.find(t => t.id === id);
+      if (transcript) {
+        transcript.text = text;
+        logger.debug('✏️ Updated transcript:', id);
+
+        // Save update to database if not viewing historical session
+        const { currentSessionId, viewingHistoricalSession } = useAppStore.getState();
+        if (currentSessionId && !viewingHistoricalSession) {
+          if (window.electronAPI && (window.electronAPI as any).updateTranscript) {
+            (window.electronAPI as any).updateTranscript(id, text).catch((error: any) => {
+              logger.error('❌ Failed to update transcript in DB:', error);
+            });
+          }
+        }
+      }
+    }),
+
+
     addTodo: (todo) => set((state) => {
       const newTodo: Todo = {
         ...todo,
@@ -610,29 +678,47 @@ export const useAppStore = create<AppState>()(
 
     sendChatMessage: async (message: string) => {
       try {
-        const { addChatMessage, transcripts, settings, selectedContext, clearSelectedContext } = useAppStore.getState();
-        
-        // Add user message immediately
-        addChatMessage({
-          role: 'user',
-          content: message,
-          timestamp: new Date()
-        });
+        const { addChatMessage, transcripts, settings, selectedContext, clearSelectedContext, currentSessionId } = useAppStore.getState();
 
-        // Prepare context from recent transcripts and selected text
-        const recentTranscripts = transcripts.slice(-10);
-        let context = recentTranscripts.length > 0
-          ? `Recent conversation context: ${recentTranscripts.map(t => t.text).join(' ')}`
-          : undefined;
+        // Initialize Groq service if not already done
+        if (!groqService.isReady() && settings.openaiKey) {
+          logger.debug('🤖 Initializing Groq service with API key');
+          groqService.initialize(settings.openaiKey);
+        }
+
+        // Build the message with context displayed (like ChatGPT)
+        let displayMessage = message;
+        let transcriptContext = undefined;
+        let startTime = undefined;
+        let endTime = undefined;
+        let speakerInfo = undefined;
 
         // Add selected context if available
         if (selectedContext.length > 0) {
-          const selectedText = selectedContext.join(' ');
-          context = context 
-            ? `${context}\n\nSelected text for reference: ${selectedText}`
-            : `Selected text for reference: ${selectedText}`;
-          
-          // Clear selected context after using it
+          const selectedText = selectedContext.join('\n');
+          // Show context in the chat message (minimalist, no label)
+          displayMessage = `"${selectedText}"\n\n${message}`;
+
+          // Try to find timestamps for selected text in transcripts
+          const matchingTranscript = transcripts.find(t => selectedText.includes(t.text.substring(0, 20)));
+          if (matchingTranscript) {
+            startTime = transcripts.indexOf(matchingTranscript) * 5; // Rough estimate
+            endTime = startTime + 10; // Rough estimate
+            speakerInfo = matchingTranscript.speaker || 'user';
+          }
+
+          transcriptContext = selectedText;
+        }
+
+        // Add user message with context shown
+        addChatMessage({
+          role: 'user',
+          content: displayMessage,
+          timestamp: new Date()
+        });
+
+        // Clear selected context after using it
+        if (selectedContext.length > 0) {
           clearSelectedContext();
         }
 
@@ -643,33 +729,90 @@ export const useAppStore = create<AppState>()(
           content: msg.content
         }));
 
-        // Send to AI service
-        if (aiService.isReady()) {
-          const response = await aiService.sendChatMessage({
+        // Send to Groq service
+        if (groqService.isReady()) {
+          // Add placeholder message for streaming
+          const assistantMessage = {
+            id: `msg-${Date.now()}`,
+            role: 'assistant' as const,
+            content: '',
+            timestamp: new Date()
+          };
+          addChatMessage(assistantMessage);
+
+          let fullResponse = '';
+
+          const response = await groqService.sendChatMessage({
             message,
-            context,
-            conversationHistory
+            context: transcriptContext ? {
+              text: transcriptContext,
+              startTime,
+              endTime,
+              speaker: speakerInfo
+            } : undefined,
+            chatHistory: conversationHistory,
+            onChunk: (chunk) => {
+              fullResponse += chunk;
+              // Update the message content as it streams
+              set((state) => {
+                const lastMessage = state.chatHistory[state.chatHistory.length - 1];
+                if (lastMessage && lastMessage.role === 'assistant') {
+                  lastMessage.content = fullResponse;
+                }
+              });
+            }
           });
 
-          addChatMessage({
-            role: 'assistant',
-            content: response.content,
-            timestamp: response.timestamp
+          // Final update with complete content
+          set((state) => {
+            const lastMessage = state.chatHistory[state.chatHistory.length - 1];
+            if (lastMessage && lastMessage.role === 'assistant') {
+              lastMessage.content = response.content;
+              lastMessage.timestamp = response.timestamp;
+            }
           });
+
+          // Save conversation to database
+          if (currentSessionId && window.electronAPI && (window.electronAPI as any).saveConversation) {
+            const conversationId = `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+            try {
+              await (window.electronAPI as any).saveConversation({
+                id: conversationId,
+                sessionId: currentSessionId,
+                userMessage: message,
+                aiResponse: response.content,
+                contextUsed: transcriptContext || '',
+                selectedTranscript: transcriptContext,
+                transcriptStartTime: startTime,
+                transcriptEndTime: endTime,
+                speakerInfo,
+                modelUsed: 'llama-3.3-70b-versatile'
+              });
+
+              logger.debug('✅ Conversation saved to database:', conversationId);
+            } catch (dbError) {
+              logger.error('❌ Failed to save conversation to DB:', dbError);
+            }
+          }
         } else {
           // Fallback response
           addChatMessage({
             role: 'assistant',
-            content: 'I need an OpenAI API key to be configured in settings to provide AI-powered responses.',
+            content: 'I need a Groq API key to be configured in settings to provide AI-powered responses. Please add your API key in Settings.',
             timestamp: new Date()
           });
         }
-      } catch (error) {
+      } catch (error: any) {
         logger.error('❌ Chat message failed:', error);
+        logger.error('Error details:', error.message);
         const { addChatMessage } = useAppStore.getState();
+
+        // Show the actual error message to help debug
+        const errorMessage = error.message || 'Unknown error occurred';
         addChatMessage({
           role: 'assistant',
-          content: '❌ Sorry, I encountered an error. Please try again.',
+          content: `❌ Error: ${errorMessage}`,
           timestamp: new Date()
         });
       }
@@ -770,6 +913,297 @@ export const useAppStore = create<AppState>()(
         const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
         return { success: false, message: errorMessage };
       }
+    },
+
+    // Session Management Actions
+    createSession: () => {
+      const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const newSession: RecordingSession = {
+        id: sessionId,
+        startedAt: new Date(),
+        transcriptCount: 0
+      };
+
+      set((state) => {
+        state.currentSessionId = sessionId;
+        state.sessions.unshift(newSession);
+        // Clear chat history for new session
+        state.chatHistory = [];
+        state.transcripts = [];
+        state.todos = [];
+      });
+
+      // Save to database via Electron IPC
+      if (window.electronAPI && (window.electronAPI as any).saveSession) {
+        (window.electronAPI as any).saveSession(newSession).catch((error: any) => {
+          logger.error('❌ Failed to save session to DB:', error);
+        });
+      }
+
+      logger.debug('✅ Created new session:', sessionId);
+      return sessionId;
+    },
+
+    endSession: async (sessionId: string, transcriptCount: number) => {
+      const endedAt = new Date();
+      const { sessions, transcripts, chatHistory } = useAppStore.getState();
+      const session = sessions.find(s => s.id === sessionId);
+
+      if (session) {
+        const duration = Math.floor((endedAt.getTime() - session.startedAt.getTime()) / 1000);
+
+        // Generate AI summary for title and description
+        let title = session.title || 'Sales Call';
+        let description = '';
+
+        try {
+          // Prepare content for AI summary
+          const transcriptText = transcripts.map(t => t.text).join(' ').substring(0, 2000);
+          const conversationText = chatHistory.map(m => `${m.role}: ${m.content}`).join('\n').substring(0, 1000);
+
+          const summaryPrompt = `Based on this sales call, generate:
+1. A concise title (10-15 words) that explains what the call was about
+2. A brief description (30-50 words) summarizing the key points of the call
+
+Transcripts:
+${transcriptText}
+
+Conversations:
+${conversationText}
+
+Format your response as:
+TITLE: [your title here]
+DESCRIPTION: [your description here]`;
+
+          const summaryResponse = await groqService.chat([
+            { role: 'system', content: 'You are a sales call summarizer. Generate concise, professional summaries.' },
+            { role: 'user', content: summaryPrompt }
+          ]);
+
+          // Parse the response
+          const titleMatch = summaryResponse.match(/TITLE:\s*(.+)/i);
+          const descMatch = summaryResponse.match(/DESCRIPTION:\s*(.+)/i);
+
+          if (titleMatch && titleMatch[1]) {
+            title = titleMatch[1].trim();
+          }
+          if (descMatch && descMatch[1]) {
+            description = descMatch[1].trim();
+          }
+
+          logger.debug('✅ Generated AI summary:', { title, description });
+        } catch (error) {
+          logger.error('❌ Failed to generate AI summary:', error);
+          description = 'No summary available';
+        }
+
+        set((state) => {
+          const sessionToUpdate = state.sessions.find(s => s.id === sessionId);
+          if (sessionToUpdate) {
+            sessionToUpdate.endedAt = endedAt;
+            sessionToUpdate.duration = duration;
+            sessionToUpdate.transcriptCount = transcriptCount;
+            sessionToUpdate.title = title;
+            sessionToUpdate.description = description;
+          }
+        });
+
+        // Update in database
+        if (window.electronAPI && (window.electronAPI as any).updateSession) {
+          try {
+            await (window.electronAPI as any).updateSession(sessionId, {
+              endedAt,
+              duration,
+              transcriptCount,
+              title,
+              description
+            });
+            logger.debug('✅ Session ended:', sessionId);
+          } catch (error) {
+            logger.error('❌ Failed to update session in DB:', error);
+          }
+        }
+      }
+    },
+
+    loadSessionConversations: async (sessionId: string) => {
+      if (!window.electronAPI || !(window.electronAPI as any).getSessionConversations) {
+        logger.warn('⚠️ Electron API not available for loading conversations');
+        return;
+      }
+
+      try {
+        const result = await (window.electronAPI as any).getSessionConversations(sessionId);
+
+        if (result.success && result.conversations) {
+          set((state) => {
+            state.chatHistory = result.conversations.map((conv: any) => ({
+              id: conv.id,
+              role: conv.user_message ? 'user' : 'assistant',
+              content: conv.user_message || conv.ai_response,
+              timestamp: new Date(conv.createdAt)
+            }));
+            state.currentSessionId = sessionId;
+          });
+
+          logger.debug(`✅ Loaded ${result.conversations.length} conversations for session:`, sessionId);
+        }
+      } catch (error) {
+        logger.error('❌ Failed to load session conversations:', error);
+      }
+    },
+
+    getAllSessions: async () => {
+      if (!window.electronAPI || !(window.electronAPI as any).getAllSessions) {
+        logger.warn('⚠️ Electron API not available for loading sessions');
+        return [];
+      }
+
+      try {
+        const result = await (window.electronAPI as any).getAllSessions();
+
+        if (result.success && result.sessions) {
+          set((state) => {
+            state.sessions = result.sessions;
+          });
+
+          logger.debug(`✅ Loaded ${result.sessions.length} sessions`);
+          return result.sessions;
+        }
+
+        return [];
+      } catch (error) {
+        logger.error('❌ Failed to load sessions:', error);
+        return [];
+      }
+    },
+
+    loadHistoricalSession: async (sessionId: string) => {
+      if (!window.electronAPI) {
+        logger.warn('⚠️ Electron API not available for loading historical session');
+        return;
+      }
+
+      try {
+        logger.debug('📚 Loading historical session:', sessionId);
+
+        // Load session details
+        const sessionResult = await (window.electronAPI as any).getSession(sessionId);
+        if (!sessionResult.success) {
+          throw new Error(sessionResult.error || 'Failed to load session');
+        }
+
+        // Load conversations
+        const conversationsResult = await (window.electronAPI as any).getSessionConversations(sessionId);
+        if (!conversationsResult.success) {
+          throw new Error(conversationsResult.error || 'Failed to load conversations');
+        }
+
+        // Load transcripts
+        const transcriptsResult = await (window.electronAPI as any).getSessionTranscripts(sessionId);
+        if (!transcriptsResult.success) {
+          logger.warn('⚠️ Failed to load transcripts:', transcriptsResult.error);
+        }
+
+        // Update state with historical data
+        set((state) => {
+          state.currentSessionId = sessionId;
+          state.viewingHistoricalSession = true;
+
+          // Load conversations into chat history - each conversation has both user and AI message
+          state.chatHistory = conversationsResult.conversations?.flatMap((conv: any) => [
+            {
+              id: `${conv.id}_user`,
+              role: 'user' as const,
+              content: conv.user_message,
+              timestamp: new Date(conv.created_at)
+            },
+            {
+              id: `${conv.id}_assistant`,
+              role: 'assistant' as const,
+              content: conv.ai_response,
+              timestamp: new Date(conv.created_at)
+            }
+          ]) || [];
+
+          // Load transcripts from database
+          state.transcripts = transcriptsResult.transcripts?.map((t: any) => ({
+            id: t.id,
+            text: t.text,
+            timestamp: new Date(t.timestamp),
+            isInterim: t.isInterim || false,
+            speaker: t.speaker || undefined
+          })) || [];
+
+          state.todos = [];
+        });
+
+        logger.debug('✅ Historical session loaded successfully:', {
+          sessionId,
+          conversationCount: conversationsResult.conversations?.length || 0,
+          transcriptCount: transcriptsResult.transcripts?.length || 0,
+          conversations: conversationsResult.conversations,
+          transcripts: transcriptsResult.transcripts
+        });
+      } catch (error) {
+        logger.error('❌ Failed to load historical session:', error);
+        throw error;
+      }
+    },
+
+    clearHistoricalSession: () => {
+      set((state) => {
+        state.viewingHistoricalSession = false;
+        state.currentSessionId = null;
+        state.chatHistory = [];
+        state.transcripts = [];
+        state.todos = [];
+        state.selectedContext = [];
+      });
+      logger.debug('✅ Cleared historical session view');
+    },
+
+    // Load fake transcripts for testing
+    loadFakeTranscripts: () => {
+      const fakeTranscripts = [
+        { speaker: 'You', text: "Hi Sarah, great to connect! I saw your post about the GenAI platform you're building for your enterprise client. Sounds like an exciting project that's already showing promise in MVP stage." },
+        { speaker: 'Client', text: "Yes, hi! Thanks for reaching out. We've been working on this for about three months now and we've got something functional, but we're hitting some walls as we try to scale." },
+        { speaker: 'You', text: "I noticed you mentioned you're dealing with RAG optimization issues and hitting OpenAI rate limits. Before we dive into the technical challenges, can you tell me a bit about what this platform does for your enterprise client?" },
+        { speaker: 'Client', text: "Sure, so we're building an AI-powered knowledge assistant for one of the largest insurance companies in the country. They have decades of documentation, policies, claims data, and they want their agents to be able to query all of this instantly. Right now we have about 50 beta users, but they want to roll this out to 5,000 agents by Q2 next year." },
+        { speaker: 'You', text: "That's a significant scale jump. And with insurance data, I imagine accuracy is critical?" },
+        { speaker: 'Client', text: "Exactly. That's why the RAG retrieval issues are killing us. Sometimes it pulls completely irrelevant policy sections when an agent asks about specific coverage details." },
+        { speaker: 'You', text: "Let's talk about your current RAG setup. You mentioned you're using Pinecone - how are you chunking your documents currently?" },
+        { speaker: 'Client', text: "We're doing 512 token chunks with 50 token overlaps. We tried smaller chunks but then we lose context, and bigger chunks seem to make relevance worse." },
+        { speaker: 'You', text: "Are you using any metadata filtering or hybrid search approaches?" },
+        { speaker: 'Client', text: "We have basic metadata like document type and date, but honestly, we haven't really optimized the metadata strategy. What do you mean by hybrid search?" },
+        { speaker: 'You', text: "So beyond just vector similarity, you can combine that with keyword search, BM25 scoring, or even knowledge graphs. I worked on a similar project for a legal firm where we improved retrieval accuracy by 40% by implementing a hybrid approach with metadata filtering based on practice areas and case precedence." },
+        { speaker: 'Client', text: "That sounds exactly like what we need. Our insurance policies have similar hierarchical structures - different coverage types, state regulations, policy versions." },
+        { speaker: 'You', text: "Right, and for your chunking strategy, have you considered using semantic chunking instead of fixed-size chunks? For structured documents like insurance policies, you want chunks that respect section boundaries." },
+        { speaker: 'Client', text: "We haven't tried that. To be honest, our team is strong on general backend development, but this specialized AI optimization is where we're struggling." },
+        { speaker: 'You', text: "Now about those 429 errors - tell me about your current API call patterns. Are you hitting rate limits during normal operations or just during peak usage?" },
+        { speaker: 'Client', text: "It's frustrating. Even with just 50 users, if more than 10 people use it simultaneously, we start hitting TPM limits. We're on OpenAI's tier 3, so we have 1 million TPM, but complex insurance queries can easily be 8-10k tokens per request." },
+        { speaker: 'You', text: "Are you implementing any caching strategies currently?" },
+        { speaker: 'Client', text: "Basic response caching, but insurance agents often ask very specific, unique questions, so cache hit rate is pretty low, maybe 15%." },
+        { speaker: 'You', text: "I see several opportunities here. First, semantic caching - instead of exact match caching, you can cache responses for semantically similar queries. Second, request queuing with priority levels. Third, have you considered using multiple API keys or even multiple providers?" },
+        { speaker: 'Client', text: "Multiple providers? Wouldn't that affect consistency?" },
+        { speaker: 'You', text: "Not if you implement it correctly. I recently helped a fintech company set up a multi-provider strategy - OpenAI for complex reasoning, Claude for document analysis, and Mistral for simple queries. We reduced costs by 60% and eliminated rate limit issues entirely. Plus, we implemented automatic fallbacks." },
+        { speaker: 'Client', text: "That's interesting. Our CFO would love the cost reduction aspect. The enterprise client is already concerned about the per-query costs scaling to 5,000 users." }
+      ];
+      
+      const { addTranscript } = useAppStore.getState();
+      
+      // Add transcripts with slight delays to simulate real conversation
+      fakeTranscripts.forEach((item, index) => {
+        setTimeout(() => {
+          addTranscript({
+            text: `[${item.speaker}]: ${item.text}`,
+            timestamp: new Date(Date.now() + index * 1000),
+            isInterim: false
+          });
+        }, index * 100); // Add each transcript 100ms apart
+      });
+      
+      logger.info('🎭 Loaded fake transcripts for testing');
     }
   }))
 );

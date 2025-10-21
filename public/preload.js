@@ -81,7 +81,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // API Testing
   testDeepgram: (apiKey) => ipcRenderer.invoke('test-deepgram', apiKey),
   testOpenAI: (apiKey) => ipcRenderer.invoke('test-openai', apiKey),
-  
+
+  // ================================
+  // CONVERSATION DATABASE
+  // ================================
+  saveSession: (session) => ipcRenderer.invoke('save-session', session),
+  updateSession: (sessionId, updates) => ipcRenderer.invoke('update-session', sessionId, updates),
+  saveConversation: (conversation) => ipcRenderer.invoke('save-conversation', conversation),
+  getSessionConversations: (sessionId) => ipcRenderer.invoke('get-session-conversations', sessionId),
+  saveTranscript: (transcript) => ipcRenderer.invoke('save-transcript', transcript),
+  getSessionTranscripts: (sessionId) => ipcRenderer.invoke('get-session-transcripts', sessionId),
+  updateTranscript: (transcriptId, text) => ipcRenderer.invoke('update-transcript', transcriptId, text),
+  getAllSessions: () => ipcRenderer.invoke('get-all-sessions'),
+  getSession: (sessionId) => ipcRenderer.invoke('get-session', sessionId),
+  deleteSession: (sessionId) => ipcRenderer.invoke('delete-session', sessionId),
+
   // Audio source management
   getAudioSources: () => ipcRenderer.invoke('get-audio-sources'),
   

@@ -61,8 +61,9 @@ interface TodoSuggestion {
 export class AIService {
   private apiKey = '';
   private baseUrl = 'https://api.openai.com/v1';
-  private model = 'gpt-3.5-turbo';
+  private model = 'gpt-5-nano';
   private isInitialized = false;
+  private provider: 'openai' | 'groq' = 'openai';
   
   // Request management
   private readonly REQUEST_TIMEOUT = 30000; // 30 seconds
@@ -93,14 +94,26 @@ export class AIService {
   }
 
   /**
-   * Initialize with OpenAI API key
+   * Initialize with API key (OpenAI or Groq)
    */
-  initialize(apiKey: string, model = 'gpt-3.5-turbo'): void {
+  initialize(apiKey: string, model = 'gpt-5-nano'): void {
     this.apiKey = apiKey;
     this.model = model;
+    
+    // Detect provider based on model
+    if (model.includes('llama') || model.includes('mixtral') || model.includes('gemma')) {
+      this.provider = 'groq';
+      this.baseUrl = 'https://api.groq.com/openai/v1';
+    } else {
+      this.provider = 'openai';
+      this.baseUrl = 'https://api.openai.com/v1';
+    }
+    
     this.isInitialized = true;
-    logger.debug(`🔑 OpenAI API configured with model: ${model}`);
+    
+    logger.debug(`🔑 ${this.provider.toUpperCase()} API configured with model: ${this.model}`);
     logger.debug(`🔑 API Key: ${apiKey.substring(0, 10)}... (length: ${apiKey.length})`);
+    logger.debug(`🔑 Base URL: ${this.baseUrl}`);
     logger.debug(`🔑 Service initialized: ${this.isInitialized}`);
   }
 
@@ -257,9 +270,10 @@ export class AIService {
   /**
    * Send chat message to AI with timeout and cancellation support
    */
-  async sendChatMessage(request: ChatRequest): Promise<ChatResponse> {
+  async sendChatMessage(request: ChatRequest, onPartialContent?: (content: string) => void): Promise<ChatResponse> {
     if (!this.isReady()) {
-      throw new Error('AI service not initialized');
+      logger.error('❌ AI service not initialized - API key missing or invalid');
+      throw new Error('AI service not initialized - please check your API key');
     }
 
     const requestId = `chat-${Date.now()}`;
@@ -274,14 +288,14 @@ export class AIService {
 
     try {
       logger.debug('💬 Sending chat message to OpenAI...');
+      logger.debug(`📊 Using model: ${this.model}, API Key length: ${this.apiKey.length}`);
 
       const messages = [
         {
           role: 'system' as const,
-          content: `You are an AI sales assistant helping with call analysis and task management. 
-                   You have access to conversation transcripts and can provide insights, suggestions, and help with follow-up tasks.
-                   Be concise, helpful, and professional.
-                   ${request.context ? `\n\nContext: ${request.context}` : ''}`
+          content: `Technical software engineer. 
+                   Be concise. no fluff. Solution-oriented. Helpful. ${request.context ? ` 
+                   Context: ${request.context}` : ''}`
         },
         // Add conversation history
         ...(request.conversationHistory || []),
@@ -291,46 +305,167 @@ export class AIService {
         }
       ];
 
-      const response = await fetch(`${this.baseUrl}/chat/completions`, {
+      // Configure request body based on provider
+      const requestBody: any = {
+        model: this.model,
+        messages,
+        stream: true
+      };
+      
+      // Configure parameters based on provider and model
+      if (this.provider === 'groq') {
+        // Groq uses standard OpenAI format
+        requestBody.temperature = 0.7;
+        requestBody.top_p = 1;
+        requestBody.stream = true; // Groq supports streaming
+      } else if (this.model.includes('gpt-5')) {
+        // GPT-5 - no token limit, temperature must be omitted (uses default of 1)
+      } else {
+        // Standard OpenAI models
+        requestBody.temperature = 0.7;
+      }
+      
+      logger.debug('📤 Request body:', JSON.stringify(requestBody, null, 2));
+      
+      let response = await fetch(`${this.baseUrl}/chat/completions`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          model: this.model,
-          messages,
-          max_tokens: 500,
-          temperature: 0.7,
-          stream: false
-        }),
+        body: JSON.stringify(requestBody),
         signal: controller.signal // Add abort signal
       });
 
-      if (!response.ok) {
-        throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
+      // If streaming fails due to verification, retry without streaming
+      if (!response.ok && requestBody.stream) {
+        const errorBody = await response.text();
+        if (errorBody.includes('verified to stream')) {
+          logger.debug('🔄 Organization not verified for streaming, retrying without stream...');
+          requestBody.stream = false;
+          
+          response = await fetch(`${this.baseUrl}/chat/completions`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${this.apiKey}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestBody),
+            signal: controller.signal
+          });
+        } else {
+          // Other errors, handle normally
+          logger.error(`OpenAI API error response: ${errorBody}`);
+          try {
+            const errorData = JSON.parse(errorBody);
+            const errorMessage = errorData.error?.message || errorData.message || response.statusText;
+            throw new Error(`OpenAI API error: ${errorMessage}`);
+          } catch {
+            throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
+          }
+        }
       }
 
-      // Parse response progressively for large responses
-      const text = await response.text();
-      const data = text.length > 10000 
-        ? await this.parseResponseProgressive(text)
-        : JSON.parse(text);
-      
-      const content = data.choices?.[0]?.message?.content || 'No response generated';
+      if (!response.ok) {
+        const errorBody = await response.text();
+        logger.error(`OpenAI API error response: ${errorBody}`);
+        
+        // Parse error if possible
+        try {
+          const errorData = JSON.parse(errorBody);
+          const errorMessage = errorData.error?.message || errorData.message || response.statusText;
+          throw new Error(`OpenAI API error: ${errorMessage}`);
+        } catch {
+          throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
+        }
+      }
 
-      logger.debug('✅ OpenAI response received');
-      
-      return {
-        content,
-        timestamp: new Date()
-      };
+      // Handle response based on whether streaming is enabled
+      if (requestBody.stream) {
+        // Handle streaming response
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
+        let fullContent = '';
+        
+        if (!reader) {
+          throw new Error('Response body is not readable');
+        }
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split('\n').filter(line => line.trim() !== '');
+          
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6);
+              if (data === '[DONE]') continue;
+              
+              try {
+                const parsed = JSON.parse(data);
+                const content = parsed.choices?.[0]?.delta?.content;
+                if (content) {
+                  fullContent += content;
+                  // Emit partial content for real-time display
+                  if (onPartialContent) {
+                    onPartialContent(fullContent);
+                  }
+                }
+              } catch (e) {
+                logger.debug('Failed to parse streaming chunk:', data);
+              }
+            }
+          }
+        }
+
+        logger.debug('✅ Streaming response complete');
+        logger.debug('💬 Full content:', fullContent);
+        
+        return {
+          content: fullContent || 'No response generated',
+          timestamp: new Date()
+        };
+      } else {
+        // Handle non-streaming response
+        const text = await response.text();
+        const data = JSON.parse(text);
+        
+        logger.debug('📥 Full API response:', JSON.stringify(data, null, 2));
+        
+        const content = data.choices?.[0]?.message?.content || 'No response generated';
+        
+        logger.debug('✅ OpenAI response received');
+        logger.debug('💬 Content extracted:', content);
+        
+        return {
+          content,
+          timestamp: new Date()
+        };
+      }
     } catch (error: any) {
       if (error.name === 'AbortError') {
         logger.error('⏱️ Request timed out');
         throw new Error('Request timeout - please try again');
       }
+      
       logger.error('❌ OpenAI chat failed:', error);
+      logger.error('Error details:', {
+        message: error.message,
+        name: error.name,
+        stack: error.stack?.split('\n').slice(0, 3).join('\n')
+      });
+      
+      // Provide more helpful error messages
+      if (error.message?.includes('401')) {
+        throw new Error('Invalid API key. Please check your OpenAI API key in settings.');
+      } else if (error.message?.includes('429')) {
+        throw new Error('Rate limit exceeded. Please wait a moment and try again.');
+      } else if (error.message?.includes('model')) {
+        throw new Error(`Model error: ${error.message}. Try using a different model.`);
+      }
+      
       throw error;
     } finally {
       clearTimeout(timeoutId);

@@ -33,48 +33,59 @@ const TranscriptPanelOptimized: React.FC = () => {
     };
   }, [componentId]);
   
-  // Handle Cmd+D shortcut for setting context
+  // Handle Cmd+D shortcut for setting context - ONLY within this component
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Check for Cmd+D (Mac) or Ctrl+D (Windows/Linux)
+      // Check if we're actually in the transcript panel
+      const target = e.target as HTMLElement;
+      const transcriptPanel = scrollContainerRef.current?.parentElement;
+      
+      // Only process if event originated from within transcript panel
+      if (!transcriptPanel || !transcriptPanel.contains(target)) {
+        return; // Let other components handle their own events
+      }
+      
+      // Only handle Cmd+D, and ONLY when we have selected text
       if ((e.metaKey || e.ctrlKey) && e.key === 'd') {
-        e.preventDefault();
-        
-        // Get selected text from the window
         const selection = window.getSelection();
         const selectedText = selection?.toString().trim();
         
         if (selectedText && selectedText.length > 0) {
-          logger.debug('📎 Setting context from selection:', selectedText);
-          setSelectedContextFromTranscript([selectedText]);
-          
-          // Visual feedback - flash background
-          const selectedElement = selection?.anchorNode?.parentElement;
-          if (selectedElement) {
-            selectedElement.style.backgroundColor = 'rgba(0, 122, 204, 0.3)';
-            setTimeout(() => {
-              selectedElement.style.backgroundColor = '';
-            }, 200);
+          // Check if selection is within our panel
+          const selectionNode = selection?.anchorNode;
+          if (selectionNode && transcriptPanel.contains(selectionNode as Node)) {
+            e.preventDefault(); // Only prevent default for our Cmd+D
+            e.stopPropagation(); // Stop event from bubbling
+            
+            logger.debug('📎 Setting context from selection:', selectedText);
+            setSelectedContextFromTranscript([selectedText]);
+            
+            // Visual feedback - flash background
+            const selectedElement = selection?.anchorNode?.parentElement;
+            if (selectedElement) {
+              selectedElement.style.backgroundColor = 'rgba(0, 122, 204, 0.3)';
+              setTimeout(() => {
+                selectedElement.style.backgroundColor = '';
+              }, 200);
+            }
+            
+            // Clear the selection
+            selection?.removeAllRanges();
           }
-          
-          // Clear the selection
-          selection?.removeAllRanges();
         }
       }
+      // All other key combinations pass through untouched
     };
     
-    // Add event listener with resource manager
-    resourceManager.addEventListener(
-      componentId,
-      document,
-      'keydown',
-      handleKeyDown as EventListener
-    );
-    
-    return () => {
-      resourceManager.removeEventListeners(componentId);
-    };
-  }, [componentId, setSelectedContextFromTranscript]);
+    // Use capture phase to get events early, but only for our component
+    const element = scrollContainerRef.current?.parentElement;
+    if (element) {
+      element.addEventListener('keydown', handleKeyDown, false);
+      return () => {
+        element.removeEventListener('keydown', handleKeyDown, false);
+      };
+    }
+  }, [setSelectedContextFromTranscript]);
   
   // Filter transcripts based on search query
   const filteredTranscripts = useMemo(() => {

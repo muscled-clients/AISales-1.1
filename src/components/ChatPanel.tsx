@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useAppStore } from '../stores/appStore';
 import { aiService } from '../services/aiService';
 import ChatInput from './ChatInput';
+import MessageContent from './MessageContent';
 
 const ChatPanel: React.FC = () => {
   // Refs for scroll 
@@ -22,7 +23,30 @@ const ChatPanel: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [aiStatus, setAiStatus] = useState('');
   const [userHasScrolled, setUserHasScrolled] = useState(false);
+  const [selectedModel, setSelectedModel] = useState('llama-3.3-70b-versatile'); // Default to free Groq model
+  const [wordLimit, setWordLimit] = useState(100); // Default 100 words
+  
+  // Estimate tokens based on context (rough: 1 token ≈ 4 characters)
+  const estimateTokens = useCallback(() => {
+    const contextLength = selectedContext.join(' ').length;
+    const historyLength = chatHistory.slice(-6).reduce((acc, msg) => acc + msg.content.length, 0);
+    const systemPromptLength = 100; // Approximate system prompt tokens
+    
+    const estimatedInputTokens = Math.ceil((contextLength + historyLength + systemPromptLength) / 4);
+    
+    // Suggest output tokens based on input size
+    // More input = likely need more output
+    if (estimatedInputTokens < 100) {
+      return 500; // Small input, standard response
+    } else if (estimatedInputTokens < 500) {
+      return 1000; // Medium input, longer response
+    } else {
+      return 2000; // Large input, detailed response
+    }
+  }, [selectedContext, chatHistory]);
 
+  // Removed auto-adjust - using manual word limit control instead
+  
   // Debug chat history changes
   React.useEffect(() => {
     logger.debug('🗨️ Chat history changed in ChatPanel, total messages:', chatHistory.length);
@@ -36,13 +60,17 @@ const ChatPanel: React.FC = () => {
   const handleSendMessage = useCallback(async (message: string) => {
     setIsLoading(true);
     try {
+      // Update AI service with selected model
+      const apiKey = settings.openaiKey || '';
+      logger.debug(`🔑 Using API key for chat: ${apiKey.substring(0, 10)}... (length: ${apiKey.length})`);
+      aiService.initialize(apiKey, selectedModel);
       await sendChatMessage(message);
     } catch (error) {
       logger.error('Chat error:', error);
     } finally {
       setIsLoading(false);
     }
-  }, [sendChatMessage]);
+  }, [sendChatMessage, settings.openaiKey, selectedModel]);
   
   // Memoized send transcript message handler
   const handleSendTranscriptMessage = useCallback(async (text: string) => {
@@ -133,8 +161,116 @@ const ChatPanel: React.FC = () => {
       return;
     }
     
+    // Handle summarize with selected context or recent transcripts
+    if (action === 'summarize') {
+      const { transcripts } = useAppStore.getState();
+      
+      // Use selected context if available, otherwise last 50 words from transcripts
+      if (selectedContext.length > 0) {
+        // Already have selected context, just summarize it
+        const message = `Provide a summary in exactly ${wordLimit} words or less. Be concise and capture the main points.`;
+        await handleSendMessage(message);
+      } else {
+        // Get last 50 words from recent transcripts
+        const recentTranscripts = transcripts.slice(-5).map(t => t.text).join(' ');
+        const words = recentTranscripts.split(' ');
+        const last50Words = words.slice(-50).join(' ');
+        
+        if (last50Words) {
+          // Set as context and summarize
+          setSelectedContext([last50Words]);
+          setTimeout(async () => {
+            const message = `Provide a summary in exactly ${wordLimit} words or less. Be concise and capture the main points.`;
+            await handleSendMessage(message);
+          }, 100);
+        } else {
+          await handleSendMessage("No recent conversation to summarize. Please select some text or start a conversation.");
+        }
+      }
+      return;
+    }
+    
+    // Handle technical analysis
+    if (action === 'technical') {
+      const { transcripts } = useAppStore.getState();
+      
+      // Use selected context if available, otherwise last 100 words from transcripts
+      if (selectedContext.length > 0) {
+        const message = `Give me 3 technical questions that need answering. Keep response under ${wordLimit} words total.`;
+        
+        await handleSendMessage(message);
+      } else {
+        // Get last 100 words from recent transcripts
+        const recentTranscripts = transcripts.slice(-8).map(t => t.text).join(' ');
+        const words = recentTranscripts.split(' ');
+        const last100Words = words.slice(-100).join(' ');
+        
+        if (last100Words) {
+          // Set as context and analyze
+          setSelectedContext([last100Words]);
+          setTimeout(async () => {
+            const message = `Analyze this technically and provide solutions. Format your response EXACTLY like this:
+
+**Understanding:** So basically you're saying [brief summary of their technical challenge]
+
+**Technical Solutions:**
+• [First technical solution with specific implementation approach]
+• [Second technical solution with specific tools/technologies]
+
+**Follow-up Questions:**
+• [Any clarifying questions needed to refine the solution]`;
+            
+            await handleSendMessage(message);
+          }, 100);
+        } else {
+          await handleSendMessage("No recent conversation to analyze. Please select some text or start a conversation.");
+        }
+      }
+      return;
+    }
+    
+    // Handle explain - how does that work?
+    if (action === 'explain') {
+      const { transcripts } = useAppStore.getState();
+      
+      // Use selected context if available, otherwise last 80 words from transcripts
+      if (selectedContext.length > 0) {
+        const message = `Explain how this works in exactly ${wordLimit} words. Focus on the key concepts and main functionality.`;
+        
+        await handleSendMessage(message);
+      } else {
+        // Get last 80 words from recent transcripts
+        const recentTranscripts = transcripts.slice(-6).map(t => t.text).join(' ');
+        const words = recentTranscripts.split(' ');
+        const last80Words = words.slice(-80).join(' ');
+        
+        if (last80Words) {
+          // Set as context and explain
+          setSelectedContext([last80Words]);
+          setTimeout(async () => {
+            const message = `Explain how this works. Provide TWO versions:
+
+**🙂 Non-Technical Explanation:**
+[Simple explanation using analogies and everyday language that anyone can understand - 2-3 sentences]
+
+**🔬 Technical Deep-Dive:**
+[Detailed technical explanation with specifics about architecture, data flow, algorithms, and implementation details - 3-4 sentences]
+
+**Key Components:**
+• [Main component 1 and its role]
+• [Main component 2 and its role]
+• [Main component 3 and its role]`;
+            
+            await handleSendMessage(message);
+          }, 100);
+        } else {
+          await handleSendMessage("No recent conversation to explain. Please select some text or start a conversation.");
+        }
+      }
+      return;
+    }
+    
     const quickMessages = {
-      summarize: "Please summarize the key points from my recent transcripts.",
       todos: "Extract action items from my recent conversations and convert them to todos.",
       insights: "What insights can you provide from my recent call transcripts?",
       sentiment: "Analyze the sentiment and tone of my recent conversations."
@@ -152,55 +288,6 @@ const ChatPanel: React.FC = () => {
 
   return (
     <div className="panel" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{ padding: '16px', borderBottom: '1px solid #333' }}>
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'center'
-        }}>
-          {/* Summarize button */}
-          <button
-            onClick={() => handleQuickAction('summarize')}
-            disabled={isLoading}
-            style={{
-              padding: '6px 12px',
-              fontSize: '11px',
-              background: '#444',
-              border: 'none',
-              borderRadius: '4px',
-              color: '#ccc',
-              cursor: isLoading ? 'not-allowed' : 'pointer',
-              opacity: isLoading ? 0.6 : 1,
-              transition: 'background 0.2s'
-            }}
-            onMouseEnter={(e) => !isLoading && (e.currentTarget.style.background = '#555')}
-            onMouseLeave={(e) => e.currentTarget.style.background = '#444'}
-          >
-            📄 Summarize
-          </button>
-
-          {/* Auto AI Suggestions Toggle */}
-          <label style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '6px',
-            fontSize: '11px',
-            color: '#ccc',
-            cursor: 'pointer'
-          }}>
-            <input
-              type="checkbox"
-              checked={settings.autoSuggestions}
-              onChange={(e) => updateSettings({ autoSuggestions: e.target.checked })}
-              style={{
-                accentColor: '#007acc',
-                transform: 'scale(0.9)'
-              }}
-            />
-            Auto AI
-          </label>
-        </div>
-      </div>
       
       {/* Chat messages */}
       <div 
@@ -244,7 +331,7 @@ const ChatPanel: React.FC = () => {
                   lineHeight: '1.4'
                 }}
               >
-                <div>{msg.content}</div>
+                <MessageContent content={msg.content} role={msg.role} />
                 {msg.timestamp && (
                   <div style={{ 
                     fontSize: '10px', 
@@ -283,6 +370,147 @@ const ChatPanel: React.FC = () => {
         onClearContext={clearSelectedContext}
         onUpdateContext={setSelectedContext}
       />
+      
+      {/* Quick actions bar - below input */}
+      <div style={{ 
+        padding: '8px 16px', 
+        borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        background: 'transparent'
+      }}>
+        {/* Left side - Action buttons and Model selector */}
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          {/* Action buttons */}
+          <div style={{ display: 'flex', gap: '8px' }}>
+          {/* Summarize button */}
+          <button
+            onClick={() => handleQuickAction('summarize')}
+            disabled={isLoading}
+            style={{
+              padding: '6px 12px',
+              fontSize: '12px',
+              background: '#444',
+              border: 'none',
+              borderRadius: '4px',
+              color: '#ccc',
+              cursor: isLoading ? 'not-allowed' : 'pointer',
+              opacity: isLoading ? 0.6 : 1,
+              transition: 'background 0.2s'
+            }}
+            onMouseEnter={(e) => !isLoading && (e.currentTarget.style.background = '#555')}
+            onMouseLeave={(e) => e.currentTarget.style.background = '#444'}
+            title="Summarize selected context or last 50 words"
+          >
+            📄 Summarize
+          </button>
+          
+          {/* Explain button */}
+          <button
+            onClick={() => handleQuickAction('explain')}
+            disabled={isLoading}
+            style={{
+              padding: '6px 12px',
+              fontSize: '12px',
+              background: '#444',
+              border: 'none',
+              borderRadius: '4px',
+              color: '#ccc',
+              cursor: isLoading ? 'not-allowed' : 'pointer',
+              opacity: isLoading ? 0.6 : 1,
+              transition: 'background 0.2s'
+            }}
+            onMouseEnter={(e) => !isLoading && (e.currentTarget.style.background = '#555')}
+            onMouseLeave={(e) => e.currentTarget.style.background = '#444'}
+            title="Explain how it works - both technical and simple"
+          >
+            ❓ Explain
+          </button>
+          
+          {/* Technical button */}
+          <button
+            onClick={() => handleQuickAction('technical')}
+            disabled={isLoading}
+            style={{
+              padding: '6px 12px',
+              fontSize: '12px',
+              background: '#444',
+              border: 'none',
+              borderRadius: '4px',
+              color: '#ccc',
+              cursor: isLoading ? 'not-allowed' : 'pointer',
+              opacity: isLoading ? 0.6 : 1,
+              transition: 'background 0.2s'
+            }}
+            onMouseEnter={(e) => !isLoading && (e.currentTarget.style.background = '#555')}
+            onMouseLeave={(e) => e.currentTarget.style.background = '#444'}
+            title="Technical analysis with solutions"
+          >
+            🔧 Technical
+          </button>
+          </div>
+          
+          {/* Model selector dropdown */}
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '6px',
+            fontSize: '12px',
+            color: '#888'
+          }}>
+            <span>Model:</span>
+            <select
+              value={selectedModel}
+              onChange={(e) => setSelectedModel(e.target.value)}
+              style={{
+                padding: '4px 8px',
+                background: '#2a2a2a',
+                border: '1px solid #444',
+                borderRadius: '4px',
+                color: '#ccc',
+                fontSize: '12px',
+                cursor: 'pointer',
+                outline: 'none'
+              }}
+              onFocus={(e) => e.target.style.borderColor = '#555'}
+              onBlur={(e) => e.target.style.borderColor = '#444'}
+            >
+              <optgroup label="OpenAI">
+                <option value="gpt-5-nano">GPT-5 Nano</option>
+                <option value="gpt-5">GPT-5 Flagship</option>
+              </optgroup>
+              <optgroup label="Groq (Free)">
+                <option value="llama-3.3-70b-versatile">Llama 3.3 70B (Best)</option>
+                <option value="llama-3.2-90b-vision-preview">Llama 3.2 90B Vision</option>
+                <option value="mixtral-8x7b-32768">Mixtral 8x7B (Fast)</option>
+                <option value="gemma2-9b-it">Gemma2 9B (Fastest)</option>
+              </optgroup>
+            </select>
+          </div>
+        </div>
+
+        {/* Auto AI Suggestions Toggle */}
+        <label style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: '6px',
+          fontSize: '12px',
+          color: '#ccc',
+          cursor: 'pointer'
+        }}>
+          <input
+            type="checkbox"
+            checked={settings.autoSuggestions}
+            onChange={(e) => updateSettings({ autoSuggestions: e.target.checked })}
+            style={{
+              accentColor: '#007acc',
+              transform: 'scale(0.9)'
+            }}
+          />
+          Auto AI
+        </label>
+      </div>
     </div>
   );
 };

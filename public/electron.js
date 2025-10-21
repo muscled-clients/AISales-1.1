@@ -5,7 +5,11 @@ const fs = require('fs');
 const DeepgramService = require('./deepgramService');
 const DualAudioCapture = require('./dualAudioCapture');
 const { createOverlayWindow, closeOverlayWindow, sendToOverlay, syncDataToOverlay } = require('./overlayWindow');
+const conversationDB = require('./supabaseDB');
 const isDev = process.env.ELECTRON_IS_DEV === 'true' || false;
+
+// Load environment variables
+require('dotenv').config();
 
 // Initialize Deepgram service
 const deepgramService = new DeepgramService();
@@ -14,8 +18,8 @@ let dualAudioCapture = null;
 // Settings storage
 const settingsPath = path.join(app.getPath('userData'), 'settings.json');
 let settings = {
-  deepgramKey: '',
-  openaiKey: '',
+  deepgramKey: process.env.DEEPGRAM_API_KEY || '',
+  openaiKey: process.env.GROQ_API_KEY || process.env.OPENAI_API_KEY || '',
   autoTranscription: true,
   autoTodos: true,
   autoSuggestions: true
@@ -54,6 +58,7 @@ function createWindow() {
     height: 800,
     minWidth: 800,
     minHeight: 600,
+    title: 'Muscled Sales AI Assistant',
     icon: path.join(__dirname, 'icon.png'), // Add app icon
     // Use default title bar for easier window dragging
     // Change to 'hiddenInset' if you want a custom title bar (requires CSS draggable regions)
@@ -116,12 +121,20 @@ function createWindow() {
 app.on('ready', () => {
   // Load settings from disk
   loadSettings();
-  
+
+  // Initialize conversation database
+  try {
+    conversationDB.initializeDB();
+    logger.debug('✅ Conversation database initialized');
+  } catch (error) {
+    logger.error('❌ Failed to initialize database:', error);
+  }
+
   // Request microphone permission on macOS
   if (process.platform === 'darwin') {
     systemPreferences.askForMediaAccess('microphone');
   }
-  
+
   createWindow();
 });
 
@@ -174,6 +187,47 @@ function createMenu() {
             isQuiting = true;
             app.quit();
           }
+        }
+      ]
+    },
+    {
+      label: 'Edit',
+      submenu: [
+        {
+          label: 'Undo',
+          accelerator: 'CmdOrCtrl+Z',
+          role: 'undo'
+        },
+        {
+          label: 'Redo',
+          accelerator: process.platform === 'darwin' ? 'Cmd+Shift+Z' : 'Ctrl+Y',
+          role: 'redo'
+        },
+        { type: 'separator' },
+        {
+          label: 'Cut',
+          accelerator: 'CmdOrCtrl+X',
+          role: 'cut'
+        },
+        {
+          label: 'Copy',
+          accelerator: 'CmdOrCtrl+C',
+          role: 'copy'
+        },
+        {
+          label: 'Paste',
+          accelerator: 'CmdOrCtrl+V',
+          role: 'paste'
+        },
+        {
+          label: 'Select All',
+          accelerator: 'CmdOrCtrl+A',
+          role: 'selectAll'
+        },
+        { type: 'separator' },
+        {
+          label: 'Delete',
+          role: 'delete'
         }
       ]
     },
@@ -398,9 +452,12 @@ ipcMain.handle('test-openai', async (event, apiKey) => {
   try {
     const https = require('https');
     return new Promise((resolve) => {
+      // Detect if it's a Groq key (starts with gsk_)
+      const isGroqKey = apiKey.startsWith('gsk_');
+      
       const options = {
-        hostname: 'api.openai.com',
-        path: '/v1/models',
+        hostname: isGroqKey ? 'api.groq.com' : 'api.openai.com',
+        path: isGroqKey ? '/openai/v1/models' : '/v1/models',
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
@@ -410,7 +467,8 @@ ipcMain.handle('test-openai', async (event, apiKey) => {
 
       const req = https.request(options, (res) => {
         if (res.statusCode === 200) {
-          resolve({ success: true, message: 'OpenAI API key is valid' });
+          const provider = isGroqKey ? 'Groq' : 'OpenAI';
+          resolve({ success: true, message: `${provider} API key is valid` });
         } else {
           resolve({ success: false, message: `Invalid API key (status: ${res.statusCode})` });
         }
@@ -553,6 +611,70 @@ ipcMain.handle('deepgram-send-audio', (event, audioData) => {
     logger.warn('⚠️ No audio service available to send data to');
   }
   return { success: true };
+});
+
+// ================================
+// CONVERSATION DATABASE IPC HANDLERS
+// ================================
+
+// Save a new recording session
+ipcMain.handle('save-session', async (event, session) => {
+  logger.debug('💾 Saving session:', session.id);
+  return conversationDB.saveSession(session);
+});
+
+// Update session metadata
+ipcMain.handle('update-session', async (event, sessionId, updates) => {
+  logger.debug('📝 Updating session:', sessionId);
+  return conversationDB.updateSession(sessionId, updates);
+});
+
+// Save an AI conversation
+ipcMain.handle('save-conversation', async (event, conversation) => {
+  logger.debug('💬 Saving conversation for session:', conversation.sessionId);
+  return conversationDB.saveConversation(conversation);
+});
+
+// Get all conversations for a session
+ipcMain.handle('get-session-conversations', async (event, sessionId) => {
+  logger.debug('📖 Loading conversations for session:', sessionId);
+  return conversationDB.getSessionConversations(sessionId);
+});
+
+// Save a transcript entry
+ipcMain.handle('save-transcript', async (event, transcript) => {
+  logger.debug('📝 Saving transcript for session:', transcript.sessionId);
+  return conversationDB.saveTranscript(transcript);
+});
+
+// Get all transcripts for a session
+ipcMain.handle('get-session-transcripts', async (event, sessionId) => {
+  logger.debug('📜 Loading transcripts for session:', sessionId);
+  return conversationDB.getSessionTranscripts(sessionId);
+});
+
+// Update a transcript
+ipcMain.handle('update-transcript', async (event, transcriptId, text) => {
+  logger.debug('✏️ Updating transcript:', transcriptId);
+  return conversationDB.updateTranscript(transcriptId, text);
+});
+
+// Get all recording sessions
+ipcMain.handle('get-all-sessions', async () => {
+  logger.debug('📋 Loading all sessions');
+  return conversationDB.getAllSessions();
+});
+
+// Get a single session by ID
+ipcMain.handle('get-session', async (event, sessionId) => {
+  logger.debug('📄 Loading session:', sessionId);
+  return conversationDB.getSession(sessionId);
+});
+
+// Delete a session and its conversations
+ipcMain.handle('delete-session', async (event, sessionId) => {
+  logger.debug('🗑️ Deleting session:', sessionId);
+  return conversationDB.deleteSession(sessionId);
 });
 
 logger.debug('🚀 AI Sales Assistant - Native Desktop App Started');

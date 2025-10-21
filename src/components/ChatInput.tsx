@@ -29,28 +29,20 @@ const ChatInput: React.FC<ChatInputProps> = memo(({
     const userMessage = message.trim();
     setMessage('');
     
-    // Keep focus on input throughout the process
-    const keepFocus = () => {
+    // Focus once after clearing message
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
+
+    // Send the message
+    await onSendMessage(userMessage);
+    
+    // Optional: Focus again after complete (but not aggressively)
+    setTimeout(() => {
       if (inputRef.current && document.activeElement !== inputRef.current) {
         inputRef.current.focus();
       }
-    };
-    
-    // Focus immediately
-    keepFocus();
-
-    // Start the async operation
-    const sendPromise = onSendMessage(userMessage);
-    
-    // Keep checking focus during send
-    const focusInterval = setInterval(keepFocus, 50);
-    
-    // Wait for send to complete
-    await sendPromise;
-    
-    // Clear interval and do final focus
-    clearInterval(focusInterval);
-    keepFocus();
+    }, 100);
   }, [message, isLoading, onSendMessage]);
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -154,6 +146,10 @@ const ChatInput: React.FC<ChatInputProps> = memo(({
           onChange={handleInputChange}
           placeholder={isLoading ? "AI is thinking..." : "Type your message..."}
           disabled={isLoading}
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
+          spellCheck={false}
           style={{
             flex: 1,
             padding: '12px',
@@ -164,7 +160,10 @@ const ChatInput: React.FC<ChatInputProps> = memo(({
             fontSize: '14px',
             outline: 'none',
             opacity: isLoading ? 0.7 : 1,
-            transition: 'border-color 0.2s'
+            transition: 'border-color 0.2s',
+            WebkitUserSelect: 'text',
+            userSelect: 'text',
+            cursor: 'text'
           }}
           onFocus={(e) => e.target.style.borderColor = '#007acc'}
           onBlur={(e) => e.target.style.borderColor = '#444'}

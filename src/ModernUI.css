@@ -24,7 +24,7 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
-  height: calc(100vh - 140px);
+  height: calc(100vh - 90px);
   padding: 16px;
   max-width: 100vw;
   overflow-x: auto;
@@ -36,7 +36,7 @@
     grid-template-columns: 1fr;
     gap: 12px;
     padding: 12px;
-    height: calc(100vh - 120px);
+    height: calc(100vh - 90px);
     overflow-y: auto;
   }
   
@@ -49,7 +49,7 @@
   .modern-three-panel {
     gap: 8px;
     padding: 8px;
-    height: calc(100vh - 100px);
+    height: calc(100vh - 90px);
   }
   
   .modern-panel {
