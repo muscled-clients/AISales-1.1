@@ -11,8 +11,9 @@ import { improvedAIProcessor } from './improvedAIProcessor';
 import { transcriptDeduplicator } from '../utils/transcriptDeduplicator';
 import { transcriptDeduplicator as efficientDeduplicator } from '../utils/transcriptDeduplication';
 import logger from '../utils/logger';
+import { AuthSlice, createAuthSlice } from './authSlice';
 
-interface AppState {
+interface AppState extends AuthSlice {
   // Recording
   recording: RecordingState;
 
@@ -77,7 +78,10 @@ interface AppState {
 }
 
 export const useAppStore = create<AppState>()(
-  immer((set) => ({
+  immer((set, get, api) => ({
+    // Auth slice
+    ...createAuthSlice(set, get, api),
+
     // Initial state
     recording: {
       isRecording: false,

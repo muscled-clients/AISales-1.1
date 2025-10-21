@@ -1,8 +1,9 @@
 import logger from './utils/logger';
 import React, { useEffect } from 'react';
-import { HashRouter as Router, Routes, Route, useSearchParams } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, useSearchParams, Navigate } from 'react-router-dom';
 import { useAppStore } from './stores/appStore';
 import Home from './components/Home';
+import Login from './components/Login';
 import Header from './components/Header';
 import MainContent from './components/MainContent';
 import ProposalsAI from './components/ProposalsAI';
@@ -11,6 +12,34 @@ import SessionHistory from './components/SessionHistory';
 import SessionDetail from './components/SessionDetail';
 import './App.css';
 import './ModernUI.css';
+
+// Protected route wrapper (DISABLED FOR NOW - auth is optional)
+const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
+  // Auth disabled - just render children
+  return children;
+
+  /* TODO: Enable auth when ready
+  const user = useAppStore((state) => state.user);
+  const authLoading = useAppStore((state) => state.authLoading);
+
+  if (authLoading) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'linear-gradient(135deg, #1e1e1e 0%, #2d2d2d 100%)',
+        color: '#fff'
+      }}>
+        Loading...
+      </div>
+    );
+  }
+
+  return user ? children : <Navigate to="/login" replace />;
+  */
+};
 
 const MainApp: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -120,15 +149,22 @@ const MainApp: React.FC = () => {
 };
 
 const App: React.FC = () => {
+  // Auth initialization disabled for now
+  // const initializeAuth = useAppStore((state) => state.initializeAuth);
+  // useEffect(() => {
+  //   initializeAuth();
+  // }, [initializeAuth]);
+
   return (
     <Router>
       <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/ai-sales-assistant" element={<MainApp />} />
-        <Route path="/proposals-ai" element={<ProposalsAI />} />
-        <Route path="/overlay" element={<OverlayMode />} />
-        <Route path="/session-history" element={<SessionHistory />} />
-        <Route path="/session/:sessionId" element={<SessionDetail />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
+        <Route path="/ai-sales-assistant" element={<ProtectedRoute><MainApp /></ProtectedRoute>} />
+        <Route path="/proposals-ai" element={<ProtectedRoute><ProposalsAI /></ProtectedRoute>} />
+        <Route path="/overlay" element={<ProtectedRoute><OverlayMode /></ProtectedRoute>} />
+        <Route path="/session-history" element={<ProtectedRoute><SessionHistory /></ProtectedRoute>} />
+        <Route path="/session/:sessionId" element={<ProtectedRoute><SessionDetail /></ProtectedRoute>} />
       </Routes>
     </Router>
   );

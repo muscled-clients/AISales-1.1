@@ -72,10 +72,10 @@ function createWindow() {
     }
   });
 
-  const startUrl = isDev 
-    ? 'http://localhost:3000' 
+  const startUrl = isDev
+    ? 'http://localhost:3009'
     : `file://${path.join(__dirname, '../build/index.html')}`;
-    
+
   mainWindow.loadURL(startUrl);
 
   // Make window globally accessible for Deepgram service

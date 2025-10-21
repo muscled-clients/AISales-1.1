@@ -5,11 +5,20 @@ import logger from '../utils/logger';
 
 const Header: React.FC = () => {
   const navigate = useNavigate();
-  const { recording, startRecording, stopRecording, setShowSettings, showTodos, setShowTodos, loadFakeTranscripts, viewingHistoricalSession } = useAppStore();
+  const { recording, startRecording, stopRecording, setShowSettings, showTodos, setShowTodos, loadFakeTranscripts, viewingHistoricalSession, profile, signOut } = useAppStore();
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      navigate('/login');
+    } catch (error) {
+      logger.error('Sign out failed:', error);
+    }
+  };
 
   const handleRecordingToggle = async () => {
     if (isProcessing) return;
@@ -247,6 +256,48 @@ const Header: React.FC = () => {
                 onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
               >
                 🎭 Load Test Transcripts
+              </button>
+
+              {/* Divider */}
+              <div style={{ height: '1px', background: 'rgba(255, 255, 255, 0.1)', margin: '4px 0' }} />
+
+              {/* User Info */}
+              {profile && (
+                <div style={{
+                  padding: '12px 16px',
+                  color: '#888',
+                  fontSize: '12px'
+                }}>
+                  {profile.full_name || profile.email}
+                  <div style={{ color: '#666', fontSize: '11px', marginTop: '2px' }}>
+                    {profile.role === 'admin' ? '👑 Admin' : '👤 Employee'}
+                  </div>
+                </div>
+              )}
+
+              <button
+                onClick={() => {
+                  handleSignOut();
+                  setShowMenu(false);
+                }}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#dc3545',
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  transition: 'background 0.2s'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(220, 53, 69, 0.1)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+              >
+                🚪 Sign Out
               </button>
             </div>
           )}

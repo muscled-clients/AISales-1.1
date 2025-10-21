@@ -8,8 +8,8 @@
   "homepage": "./",
   "scripts": {
     "start": "electron .",
-    "dev": "concurrently \"npm run react\" \"wait-on http://localhost:3000 && ELECTRON_IS_DEV=true electron .\"",
-    "react": "BROWSER=none react-scripts start",
+    "dev": "concurrently \"npm run react\" \"wait-on http://localhost:3009 && ELECTRON_IS_DEV=true electron .\"",
+    "react": "PORT=3009 BROWSER=none react-scripts start",
     "build": "react-scripts build",
     "electron-build": "npm run build && electron-builder",
     "electron-dev": "set ELECTRON_IS_DEV=true&& electron .",
